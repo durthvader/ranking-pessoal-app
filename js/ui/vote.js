@@ -157,7 +157,7 @@ export function renderVote(app, root) {
     }
     p.shownAt = new Date().toISOString();
     p.shownMs = performance.now();
-    setTimeout(() => { if (st.cur === p) p.ready = true; }, 250);
+    p.ready = true;
     prefetchNext();
   }
 
@@ -240,9 +240,12 @@ export function renderVote(app, root) {
     return ev;
   }
 
+  // Trava contra toque duplo: ignora toques nos primeiros 250 ms depois que as duas fotos aparecem
+  // (conferido pelo relógio, sem depender de temporizador, que atrasa em aparelhos lentos).
   async function choose(side) {
     const p = st.cur;
     if (!p || p.locked || !p.ready || st.busy) return;
+    if (performance.now() - p.shownMs < 250) return;
     p.locked = true;
     st.busy = true;
     frames[side].el.classList.add('chosen');
