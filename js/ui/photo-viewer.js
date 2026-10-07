@@ -1,6 +1,6 @@
 import { h } from '../util.js';
 import { icon } from './common.js';
-import { imageSearchControls } from './image-search.js';
+import { imageSearchControls, imageSearchShortcut } from './image-search.js';
 
 // O mesmo visualizador permanece montado ao votar e mudar de dupla.
 export function createPhotoViewer({ getPair, getName, getUrl, isReady, onChoose, onAction, showNames = () => true, canManage = () => true }) {
@@ -22,6 +22,7 @@ export function createPhotoViewer({ getPair, getName, getUrl, isReady, onChoose,
     for (const side of ['L', 'R']) {
       panels[side].el.classList.toggle('selected', cur === side);
       panels[side].el.setAttribute('aria-label', `${side === 'L' ? 'Foto 1' : 'Foto 2'}${showNames() && getName(side) ? ` · ${getName(side)}` : ''}`);
+      panels[side].search?.update();
     }
     status.textContent = busy ? 'Salvando escolha…' : !getPair() ? 'Nenhum par disponível. Feche para revisar.'
       : panels.L.failed || panels.R.failed ? 'Uma foto não carregou. Use Opções para marcar o problema ou rever depois.'
@@ -51,6 +52,10 @@ export function createPhotoViewer({ getPair, getName, getUrl, isReady, onChoose,
     const loading = h('span', { class: 'viewer-loading' }, 'Carregando…');
     const el = h('div', { class: 'viewer-photo', tabindex: '0' }, img, loading);
     const panel = { el, img, loading, loaded: false, failed: false };
+    if (canManage()) {
+      panel.search = imageSearchShortcut(() => getPair() ? getName(side) : '');
+      el.append(panel.search.el);
+    }
     let scale = 1, tx = 0, ty = 0, start = null, lastDist = 0, lastTap = null, multi = false;
     const pointers = new Map();
     const apply = () => { img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`; };
@@ -184,12 +189,13 @@ export function createPhotoViewer({ getPair, getName, getUrl, isReady, onChoose,
   function keydown(e) {
     if (!view || document.querySelector('.overlay')) return;
     if (e.target.closest?.('select, input, textarea') && !['Tab', 'Escape'].includes(e.key)) return;
+    if (e.target.closest?.('.image-search-shortcut') && !['Tab', 'Escape'].includes(e.key)) return;
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.key === 'Escape') { e.preventDefault(); close(); }
     else if (e.key === 'Tab') {
       const focusables = [...view.querySelectorAll('button:not([disabled]), select, a[href], summary, [tabindex="0"]')]
         .filter(el => !el.hidden && !el.closest('[hidden]') && (!el.closest('.viewer-menu') || options.open)
-          && (!el.classList.contains('viewer-photo') || view.classList.contains('two-photos') || el === panels[cur].el));
+          && (!el.closest('.viewer-photo') || view.classList.contains('two-photos') || el.closest('.viewer-photo') === panels[cur].el));
       const index = focusables.indexOf(document.activeElement);
       if (e.shiftKey && index <= 0) { e.preventDefault(); focusables.at(-1)?.focus(); }
       else if (!e.shiftKey && (index === -1 || index === focusables.length - 1)) { e.preventDefault(); focusables[0]?.focus(); }
@@ -214,14 +220,14 @@ export function createPhotoViewer({ getPair, getName, getUrl, isReady, onChoose,
       mode = selectMode.value; localStorage.setItem('rp-viewer-mode', mode); layout();
     } }, [['auto', 'Automático'], ['uma', 'Uma foto'], ['duas', 'Duas fotos']].map(([value, label]) => h('option', { value, selected: mode === value }, label)));
     fullscreenButton = button('Tela cheia', fullscreen, 'viewer-fullscreen');
-    search = imageSearchControls(name);
+    search = imageSearchControls(name, { includeLink: false, onChange: controls });
     options = h('details', { class: 'viewer-options' }, h('summary', null, 'Opções'),
       h('div', { class: 'viewer-menu' },
         button('Rever depois', () => { options.open = false; onAction('later'); }),
         canManage() ? button('Problema na foto', () => { options.open = false; onAction('problem'); }) : null,
         button('Desfazer', () => { options.open = false; onAction('undo'); }),
-        canManage() ? h('p', null, 'Buscar alternativas para a foto selecionada:') : null, canManage() ? search.el : null,
-        canManage() ? h('small', null, 'A busca abre outra aba. Confira a identidade e a idade na época da foto.') : null));
+        canManage() ? h('p', null, 'Termo da busca no Google Imagens:') : null, canManage() ? search.el : null,
+        canManage() ? h('small', null, 'Toque em G ↗ sobre a foto para buscar alternativas em outra aba.') : null));
     otherButton = button('Outra foto', () => show(cur === 'L' ? 'R' : 'L'), 'viewer-other');
     otherButton.prepend(icon('dir'));
     chooseButton = button('Escolher esta', () => { if (!chooseButton.disabled) onChoose(cur); }, 'primary viewer-choose');

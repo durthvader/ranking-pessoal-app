@@ -4,6 +4,7 @@ import { PHASE_LABEL, REASON_TEXT } from '../engine.js';
 import { evalSettings } from '../store.js';
 import { createPhotoViewer } from './photo-viewer.js';
 import { isGuest } from '../access.js';
+import { imageSearchControls, imageSearchShortcut } from './image-search.js';
 
 const PROBLEMS = [
   ['nao_carrega', 'A foto não carrega'],
@@ -48,10 +49,10 @@ export function renderVote(app, root) {
     const loading = h('div', { class: 'loading' }, 'Carregando…');
     const label = h('div', { class: 'label', hidden: true });
     const sideTag = h('div', { class: 'side' });
-    const el = h('div', { class: 'frame', role: 'button', tabindex: '0', 'aria-label': side === 'L' ? 'Escolher a foto da esquerda' : 'Escolher a foto da direita' }, loading, img, label, sideTag);
-    el.addEventListener('click', () => choose(side));
-    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(side); } });
-    return { el, img, loading, label, sideTag };
+    const choice = h('button', { class: 'frame-choice', type: 'button', 'aria-label': side === 'L' ? 'Escolher a foto da esquerda' : 'Escolher a foto da direita', onclick: () => choose(side) });
+    const search = !isGuest(app.access) ? imageSearchShortcut(() => app.state.participants.get(side === 'L' ? st.cur?.left : st.cur?.right)?.name || '') : null;
+    const el = h('div', { class: 'frame' }, loading, img, label, sideTag, choice, search?.el);
+    return { el, img, loading, label, sideTag, choice, search };
   }
 
   const btn = (label, ic, fn, kbd, cls = '') => h('button', { class: `btn ${cls}`, onclick: fn }, ic ? icon(ic) : null, label, kbd ? h('span', { class: 'kbd' }, kbd) : null);
@@ -152,7 +153,8 @@ export function renderVote(app, root) {
       const part = app.state.participants.get(pid);
       f.label.textContent = part?.name || '';
       f.label.hidden = !app.state.prefs.showNames;
-      f.el.setAttribute('aria-label', `Escolher ${app.state.prefs.showNames && part?.name || (side === 'L' ? 'a primeira foto' : 'a segunda foto')}`);
+      f.choice.setAttribute('aria-label', `Escolher ${app.state.prefs.showNames && part?.name || (side === 'L' ? 'a primeira foto' : 'a segunda foto')}`);
+      f.search?.update();
     }
     viewer.update();
     renderHead();
@@ -342,6 +344,7 @@ export function renderVote(app, root) {
     const rs = st.mode === 'revisao' ? null : app.engine.reviewSet();
     const v = await choiceDialog('Mais opções', null, [
       ...(!isGuest(app.access) ? [{ label: 'Problema na foto', value: 'problema' }] : []),
+      ...(!isGuest(app.access) ? [{ label: 'Termo da busca no Google Imagens', value: 'busca' }] : []),
       { label: 'Desfazer última escolha', value: 'desfazer' },
       { label: localStorage.getItem('rp-photo-fit') === 'inteira' ? 'Usar recorte 3×4 nos cartões' : 'Mostrar fotos inteiras nos cartões', value: 'enquadramento' },
       st.mode === 'revisao'
@@ -352,6 +355,10 @@ export function renderVote(app, root) {
       { label: 'Atalhos do teclado', value: 'atalhos' },
     ]);
     if (v === 'problema') problem();
+    else if (v === 'busca') {
+      const search = imageSearchControls(() => '', { includeLink: false, onChange: () => { frames.L.search?.update(); frames.R.search?.update(); } });
+      modal('Termo da busca no Google Imagens', h('div', null, search.el, h('p', { class: 'help' }, 'Toque em G ↗ no canto da foto para buscar alternativas.')), [{ label: 'Fechar' }]);
+    }
     else if (v === 'desfazer') undo();
     else if (v === 'enquadramento') {
       localStorage.setItem('rp-photo-fit', localStorage.getItem('rp-photo-fit') === 'inteira' ? 'recorte' : 'inteira');
@@ -397,6 +404,7 @@ export function renderVote(app, root) {
   }
 
   function onKey(e) {
+    if (e.target.closest('.image-search-shortcut')) return;
     if (e.target.closest('input, textarea, select') || document.querySelector('.overlay, .zoomview, .drawer')) return;
     if (e.altKey || e.metaKey) return;
     const k = e.key;
