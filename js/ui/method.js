@@ -1,7 +1,15 @@
 import { h } from '../util.js';
 import { evalSettings } from '../store.js';
+import { isGuest } from '../access.js';
 
 export function renderMethod(app, root) {
+  if (isGuest(app.access)) {
+    root.append(h('h1', null, 'Como funciona sua avaliação'),
+      h('p', null, 'Escolha a foto que você prefere em cada dupla. Use Tela cheia para comparar com mais detalhe e Rever depois quando não quiser decidir agora.'),
+      h('p', null, 'Seu ranking usa apenas suas escolhas. Ele muda conforme você avalia mais participantes; posições com poucas comparações ainda têm maior incerteza.'),
+      h('p', null, 'Você pode desfazer ou corrigir suas escolhas no Histórico. O administrador mantém as participantes e as fotos do catálogo compartilhado.'));
+    return;
+  }
   const s = app.state ? evalSettings(app.state) : null;
   const m = app.engine?.model;
   const P = (...t) => h('p', null, ...t);

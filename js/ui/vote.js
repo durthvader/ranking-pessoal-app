@@ -3,6 +3,7 @@ import { icon, toast, modal, choiceDialog } from './common.js';
 import { PHASE_LABEL, REASON_TEXT } from '../engine.js';
 import { evalSettings } from '../store.js';
 import { createPhotoViewer } from './photo-viewer.js';
+import { isGuest } from '../access.js';
 
 const PROBLEMS = [
   ['nao_carrega', 'A foto não carrega'],
@@ -24,6 +25,7 @@ export function renderVote(app, root) {
     getPair: () => st.cur,
     getName: (side) => app.state.participants.get(side === 'L' ? st.cur?.left : st.cur?.right)?.name || '',
     showNames: () => !!app.state.prefs.showNames,
+    canManage: () => !isGuest(app.access),
     getUrl: (side, p) => {
       const ph = app.state.photos.get(side === 'L' ? p.pl : p.pr);
       return app.images.url(ph?.path, ph?.external_url || null);
@@ -106,7 +108,9 @@ export function renderVote(app, root) {
     pair.classList.remove('stack');
     const s = app.state;
     const box = h('div', { class: 'empty', style: { gridColumn: '1 / -1' } });
-    if (!s.participants.size) {
+    if (isGuest(app.access) && (!s.participants.size || !s.activeEval)) {
+      box.append(h('h2', null, 'Carregando sua avaliação'), h('p', null, 'O catálogo e sua avaliação chegam pela sincronização. Aguarde a conexão.'));
+    } else if (!s.participants.size) {
       box.append(h('h2', null, 'Ainda não há participantes'), h('p', null, 'Importe o pacote inicial (.zip) ou uma planilha para começar.'),
         h('a', { class: 'btn primary', href: '#/participantes?aba=importar' }, 'Importar participantes'));
     } else if (!s.activeEval) {
@@ -293,6 +297,7 @@ export function renderVote(app, root) {
   }
 
   async function problem() {
+    if (isGuest(app.access)) return;
     const p = st.cur;
     if (!p || p.locked || st.busy) return;
     const target = await choiceDialog('Problema na foto', 'Qual foto tem problema?', [
@@ -336,7 +341,7 @@ export function renderVote(app, root) {
     const settings = evalSettings(app.state);
     const rs = st.mode === 'revisao' ? null : app.engine.reviewSet();
     const v = await choiceDialog('Mais opções', null, [
-      { label: 'Problema na foto', value: 'problema' },
+      ...(!isGuest(app.access) ? [{ label: 'Problema na foto', value: 'problema' }] : []),
       { label: 'Desfazer última escolha', value: 'desfazer' },
       { label: localStorage.getItem('rp-photo-fit') === 'inteira' ? 'Usar recorte 3×4 nos cartões' : 'Mostrar fotos inteiras nos cartões', value: 'enquadramento' },
       st.mode === 'revisao'

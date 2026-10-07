@@ -69,10 +69,13 @@ export class LocalDB {
     return req(tx.objectStore('events').getAll());
   }
 
-  async pendingEvents(limit = 200) {
+  async pendingEvents(limit = 200, { decisionsFirst = false } = {}) {
     const tx = this.db.transaction('events', 'readonly');
     const idx = tx.objectStore('events').index('pending');
-    return req(idx.getAll(IDBKeyRange.only(1), limit));
+    if (!decisionsFirst) return req(idx.getAll(IDBKeyRange.only(1), limit));
+    const rows = await req(idx.getAll(IDBKeyRange.only(1)));
+    return rows.sort((a,b) => Number(a.type === 'revise') - Number(b.type === 'revise')
+      || String(a.at).localeCompare(String(b.at)) || a.id.localeCompare(b.id)).slice(0,limit);
   }
 
   async countPending() {

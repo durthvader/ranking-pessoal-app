@@ -4,6 +4,7 @@ import { eligibilityIssues, evalSettings } from '../store.js';
 import { Z_OF_LEVEL } from './ranking.js';
 import { restoreBackup, importSpreadsheet } from '../backup.js';
 import { imageSearchControls } from './image-search.js';
+import { isOwner } from '../access.js';
 
 const ORIGIN_LABEL = {
   'importacao:planilha': 'link da planilha',
@@ -31,6 +32,17 @@ export function photoFlags(ph) {
 }
 
 export function openParticipant(app, pid) {
+  if (!isOwner(app.access)) {
+    return openDrawer(root => {
+      const p = app.state.participants.get(pid);
+      if (!p) { root.append(h('p', null, 'Participante não encontrada.')); return; }
+      const image = photoImg(app, app.state.photos.get(p.primary), { cls: '', full: true, alt: p.name });
+      image.style.cssText = 'width:100%;max-height:70dvh;object-fit:contain;display:block';
+      const row = app.engine.rankingRows().find(r => r.pid === pid);
+      root.append(h('h1', null, p.name), image,
+        row ? h('p', { class: 'muted' }, `${row.pos}º na sua avaliação · ${fmtInt(row.comps)} comparações`) : null);
+    });
+  }
   openDrawer((root) => {
     const draw = () => {
       clear(root);

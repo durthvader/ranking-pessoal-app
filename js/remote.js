@@ -1,4 +1,5 @@
 // Adaptador do Supabase: autenticação, tabela de eventos, armazenamento de fotos e função de busca de imagem.
+import { assertWritableEvents, isGuest } from './access.js';
 
 export const TABLE = 'eventos';
 export const BUCKET = 'fotos';
@@ -11,6 +12,8 @@ export class Remote {
       auth: { persistSession: true, autoRefreshToken: true, storageKey: 'rp-auth', detectSessionInUrl: true },
     });
     this.user = null;
+    this.access = null;
+    this.catalogOwner = null;
   }
 
   async session() {
@@ -62,19 +65,29 @@ export class Remote {
 
   // Envio idempotente: (dono, id) é a chave primária; repetições são ignoradas pelo banco.
   async pushEvents(evs) {
+    if (this.access) assertWritableEvents(this.access, evs, this.uid);
     const rows = evs.map((e) => ({
       id: e.id, type: e.type, eval: e.eval ?? null, data: e.data ?? {}, device: e.device ?? '',
       session: e.session ?? null, at: e.at,
     }));
     // a chave é (owner, id); o dono vem da sessão (gatilho no banco)
-    const { error } = await this.client.from(TABLE).upsert(rows, { onConflict: 'owner,id', ignoreDuplicates: true });
-    if (error) throw traduzErro(error);
+    // Revisões podem apontar para um voto criado offline no mesmo lote.
+    const groups = isGuest(this.access) ? [rows.filter(e => e.type !== 'revise'), rows.filter(e => e.type === 'revise')] : [rows];
+    for (const group of groups) {
+      if (!group.length) continue;
+      const { error } = await this.client.from(TABLE).upsert(group, { onConflict: 'owner,id', ignoreDuplicates: true });
+      if (error) throw traduzErro(error);
+    }
+  }
+
+  eventScope(query) {
+    return isGuest(this.access) ? query.or(`owner.eq.${this.uid},owner.eq.${this.access.host_id}`) : query.eq('owner', this.uid);
   }
 
   async pullEvents(sinceSeq, limit = 1000) {
-    const { data, error } = await this.client
+    const { data, error } = await this.eventScope(this.client
       .from(TABLE)
-      .select('id,seq,type,eval,data,device,session,at')
+      .select('id,owner,seq,type,eval,data,device,session,at'))
       .gt('seq', sinceSeq)
       .order('seq', { ascending: true })
       .limit(limit);
@@ -86,7 +99,7 @@ export class Remote {
     const ids = new Set();
     let since = 0;
     for (;;) {
-      const { data, error } = await this.client.from(TABLE).select('id,seq').gt('seq', since).order('seq').limit(1000);
+      const { data, error } = await this.eventScope(this.client.from(TABLE).select('id,seq')).gt('seq', since).order('seq').limit(1000);
       if (error) throw traduzErro(error);
       if (!data.length) break;
       for (const r of data) ids.add(r.id);
@@ -96,12 +109,12 @@ export class Remote {
     return ids;
   }
 
-  objectPath(path) {
-    return `${this.uid}/${path}`;
+  objectPath(path, write = false) {
+    return `${write ? this.uid : this.catalogOwner || this.uid}/${path}`;
   }
 
   async uploadBlob(path, blob) {
-    const { error } = await this.client.storage.from(BUCKET).upload(this.objectPath(path), blob, {
+    const { error } = await this.client.storage.from(BUCKET).upload(this.objectPath(path, true), blob, {
       upsert: true, contentType: blob.type || 'image/jpeg', cacheControl: '31536000',
     });
     if (error) throw traduzErro(error);
@@ -134,6 +147,50 @@ export class Remote {
     const { error } = await this.client.from(TABLE).select('id', { head: true, count: 'exact' }).limit(1);
     if (error) throw traduzErro(error);
     return true;
+  }
+
+  async getAccess() {
+    const { data, error } = await this.client.from('ranking_accounts').select('*').eq('user_id', this.uid).maybeSingle();
+    if (error) throw traduzErro(error);
+    if (!data) throw new Error('Seu perfil de acesso ainda não está disponível.');
+    this.access = data;
+    this.catalogOwner = data.role === 'guest' ? data.host_id : null;
+    return data;
+  }
+
+  async listAccessRequests() {
+    const { data, error } = await this.client.from('ranking_accounts').select('*').eq('host_id', this.uid).order('created_at', { ascending: false });
+    if (error) throw traduzErro(error);
+    return data || [];
+  }
+
+  async reviewAccess(user, approve) {
+    const { data, error } = await this.client.rpc('review_ranking_access', { p_user: user, p_approve: approve });
+    if (error) throw traduzErro(error);
+    return data;
+  }
+
+  async guestEvents(user) {
+    const events = [];
+    let since = 0;
+    for (;;) {
+      const { data, error } = await this.client.rpc('ranking_guest_events', { p_user: user, p_since: since, p_limit: 1000 });
+      if (error) throw traduzErro(error);
+      if (!data?.length) break;
+      events.push(...data); since = data.at(-1).seq;
+      if (data.length < 1000) break;
+    }
+    return events;
+  }
+
+  async requestAccess({ email, password, name }, registrationKey) {
+    const response = await fetch(`${this.url}/functions/v1/solicitar-acesso`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', apikey: registrationKey, Authorization: `Bearer ${registrationKey}` },
+      body: JSON.stringify({ email, password, name }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Não foi possível concluir o cadastro.');
+    return data;
   }
 }
 

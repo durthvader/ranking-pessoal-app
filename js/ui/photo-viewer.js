@@ -3,7 +3,7 @@ import { icon } from './common.js';
 import { imageSearchControls } from './image-search.js';
 
 // O mesmo visualizador permanece montado ao votar e mudar de dupla.
-export function createPhotoViewer({ getPair, getName, getUrl, isReady, onChoose, onAction, showNames = () => true }) {
+export function createPhotoViewer({ getPair, getName, getUrl, isReady, onChoose, onAction, showNames = () => true, canManage = () => true }) {
   let view = null, cur = 'L', pairId = null, busy = false, generation = 0;
   let mode = localStorage.getItem('rp-viewer-mode') || 'auto';
   let previousFocus, appRoot, previousInert, previousOverflow, ownsFullscreen = false;
@@ -218,10 +218,10 @@ export function createPhotoViewer({ getPair, getName, getUrl, isReady, onChoose,
     options = h('details', { class: 'viewer-options' }, h('summary', null, 'Opções'),
       h('div', { class: 'viewer-menu' },
         button('Rever depois', () => { options.open = false; onAction('later'); }),
-        button('Problema na foto', () => { options.open = false; onAction('problem'); }),
+        canManage() ? button('Problema na foto', () => { options.open = false; onAction('problem'); }) : null,
         button('Desfazer', () => { options.open = false; onAction('undo'); }),
-        h('p', null, 'Buscar alternativas para a foto selecionada:'), search.el,
-        h('small', null, 'A busca abre outra aba. Confira a identidade e a idade na época da foto.')));
+        canManage() ? h('p', null, 'Buscar alternativas para a foto selecionada:') : null, canManage() ? search.el : null,
+        canManage() ? h('small', null, 'A busca abre outra aba. Confira a identidade e a idade na época da foto.') : null));
     otherButton = button('Outra foto', () => show(cur === 'L' ? 'R' : 'L'), 'viewer-other');
     otherButton.prepend(icon('dir'));
     chooseButton = button('Escolher esta', () => { if (!chooseButton.disabled) onChoose(cur); }, 'primary viewer-choose');

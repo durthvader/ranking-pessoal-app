@@ -2,6 +2,7 @@ import { h, clear, fmtInt, fmtPct, fmtNum, plural } from '../util.js';
 import { photoImg, badge, section, toast } from './common.js';
 import { openParticipant } from './participants.js';
 import { closeVersionDialog } from './versions.js';
+import { isOwner } from '../access.js';
 
 export function renderProgress(app, root) {
   const body = h('div');
@@ -20,8 +21,8 @@ export function renderProgress(app, root) {
   function draw() {
     clear(body);
     const s = app.state;
-    if (!s.participants.size) { body.append(h('div', { class: 'empty' }, 'Importe as participantes para começar.')); return; }
-    if (!s.activeEval) { body.append(h('div', { class: 'empty' }, 'Nenhuma avaliação ativa. ', h('a', { href: '#/versoes' }, 'Abrir Versões'))); return; }
+    if (!s.participants.size) { body.append(h('div', { class: 'empty' }, isOwner(app.access) ? 'Importe as participantes para começar.' : 'Aguarde a sincronização do catálogo.')); return; }
+    if (!s.activeEval) { body.append(h('div', { class: 'empty' }, 'Nenhuma avaliação ativa. ', isOwner(app.access) ? h('a', { href: '#/versoes' }, 'Abrir Versões') : null)); return; }
     const prog = app.engine.progress();
     const m = app.engine.model;
     const settings = prog.settings;
@@ -32,10 +33,10 @@ export function renderProgress(app, root) {
     if (reached) {
       body.append(h('div', { class: 'notice ok' },
         h('strong', null, `Orçamento atingido: ${fmtInt(prog.valid)} escolhas válidas. `),
-        'A lista abaixo mostra a situação atual e as dúvidas que restam. Você pode encerrar esta versão (fica guardada com data, configurações e votos) ou continuar avaliando.',
+        isOwner(app.access) ? 'A lista abaixo mostra a situação atual e as dúvidas que restam. Você pode encerrar esta versão (fica guardada com data, configurações e votos) ou continuar avaliando.' : 'A lista abaixo mostra seu ranking atual e as posições que ainda têm dúvida. Você pode continuar avaliando.',
         h('div', { class: 'row', style: { marginTop: '8px' } },
           h('a', { class: 'btn', href: '#/ranking' }, 'Ver lista completa'),
-          h('button', { class: 'btn primary', onclick: () => closeVersionDialog(app) }, 'Encerrar esta versão'),
+          isOwner(app.access) ? h('button', { class: 'btn primary', onclick: () => closeVersionDialog(app) }, 'Encerrar esta versão') : null,
           h('a', { class: 'btn', href: '#/votar' }, 'Continuar avaliando'))));
     }
 
@@ -68,7 +69,7 @@ export function renderProgress(app, root) {
       h('p', { class: 'help' }, prog.uncoveredEligible > 0
         ? `Fase de cobertura: faltam cerca de ${fmtInt(Math.ceil(prog.missingCoverage / 2))} confrontos para todas chegarem a ${prog.coverageMin} comparações.`
         : 'Cobertura completa. Os confrontos agora seguem a fase adaptativa.'),
-      prog.activeN - prog.eligibleN > 0 ? h('p', { class: 'help' }, `${prog.activeN - prog.eligibleN} participantes estão fora dos confrontos por pendência de foto. `, h('a', { href: '#/participantes?aba=revisar' }, 'Revisar')) : null));
+      prog.activeN - prog.eligibleN > 0 ? h('p', { class: 'help' }, `${prog.activeN - prog.eligibleN} participantes estão fora dos confrontos por pendência de foto. `, isOwner(app.access) ? h('a', { href: '#/participantes?aba=revisar' }, 'Revisar') : null) : null));
 
     // 3. disputa pelo 1º lugar
     if (m && prog.top) {

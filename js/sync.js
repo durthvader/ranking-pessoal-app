@@ -78,7 +78,7 @@ export class Sync {
       // 1. envia a fila
       let pushed = 0;
       for (;;) {
-        const batch = await this.db.pendingEvents(200);
+        const batch = await this.db.pendingEvents(200, { decisionsFirst: this.remote.access?.role === 'guest' });
         if (!batch.length) break;
         await this.remote.pushEvents(batch);
         await this.db.markSent(batch.map((e) => e.id));
@@ -135,7 +135,7 @@ export class Sync {
     if (!this.remote) return { missing: 0 };
     const ids = await this.remote.remoteIds();
     const local = await this.db.allEvents();
-    const missing = local.filter((e) => !ids.has(e.id));
+    const missing = local.filter((e) => !ids.has(e.id) && (!this.remote.access || this.remote.access.role !== 'guest' || e.owner === this.remote.uid));
     if (missing.length) {
       for (let k = 0; k < missing.length; k += 200) await this.remote.pushEvents(missing.slice(k, k + 200));
     }

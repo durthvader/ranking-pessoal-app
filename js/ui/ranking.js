@@ -1,6 +1,7 @@
 import { h, clear, fmtInt, fmtPct, normName } from '../util.js';
 import { photoImg, badge } from './common.js';
 import { openParticipant } from './participants.js';
+import { isGuest } from '../access.js';
 
 export const Z_OF_LEVEL = { 0.8: 1.2816, 0.9: 1.6449, 0.95: 1.96 };
 
@@ -38,7 +39,7 @@ export function renderRanking(app, root) {
     clear(body);
     const m = app.engine.model;
     if (!app.state.participants.size) {
-      body.append(h('div', { class: 'empty' }, 'Importe as participantes para ver o ranking. ', h('a', { href: '#/participantes?aba=importar' }, 'Importar')));
+      body.append(h('div', { class: 'empty' }, isGuest(app.access) ? 'Aguarde a sincronização do catálogo.' : 'Importe as participantes para ver o ranking. ', !isGuest(app.access) ? h('a', { href: '#/participantes?aba=importar' }, 'Importar') : null));
       return;
     }
     if (!m) {
@@ -53,7 +54,7 @@ export function renderRanking(app, root) {
       prog.valid >= settings.budget
         ? `Orçamento de ${fmtInt(settings.budget)} escolhas atingido. A lista continua sendo uma estimativa: veja em Progresso as posições que ainda têm dúvida.`
         : `Ranking em estimativa: ${fmtInt(prog.valid)} de ${fmtInt(settings.budget)} escolhas válidas. As posições mudam conforme você vota.`,
-      ' ', h('span', { class: 'help' }, `Índice de preferência em escala Elo; ± indica a faixa de ${lvl}%. Faixa de posição: intervalo com ${lvl}% de chance estimada. Chances de 1º lugar são estimativas condicionadas ao modelo e aos votos (σ do prior: ${m.sigmaUsed ? m.sigmaUsed.toFixed(2) : settings.sigma}).`)));
+      ' ', h('span', { class: 'help' }, `Índice de preferência em escala Elo; ± indica a faixa de ${lvl}%. Faixa de posição: intervalo com ${lvl}% de chance estimada. Chances de 1º lugar são estimativas condicionadas ao modelo e aos votos${isGuest(app.access) ? '' : ` (σ do prior: ${m.sigmaUsed ? m.sigmaUsed.toFixed(2) : settings.sigma})`}.`)));
     let rows = app.engine.rankingRows();
     const term = normName(q.value);
     if (term) rows = rows.filter((r) => normName(r.name).includes(term));

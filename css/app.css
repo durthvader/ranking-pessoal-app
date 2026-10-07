@@ -330,6 +330,9 @@ body.vote-screen main { min-height: 0; }
 .image-search-controls { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .image-search-controls select { flex: 1; min-width: 100px; }
 .image-search-controls .btn { font-size: 12px; }
+.guest-request { margin-top: 12px; }
+.correlation-plot { width: 100%; max-height: 420px; display: block; }
+.correlation-plot circle:focus { opacity: 1; outline: 2px solid var(--text); }
 .viewer-open .overlay { z-index: 70; }
 .viewer-open .toastbox { z-index: 80; }
 @media (orientation: landscape) and (max-height: 520px) {

@@ -2,6 +2,7 @@ import { h, clear, fmtDate, normName } from '../util.js';
 import { photoImg, badge, toast, modal, confirmDialog } from './common.js';
 import { evalSettings, voteExclusionReason } from '../store.js';
 import { openParticipant } from './participants.js';
+import { isOwner } from '../access.js';
 
 const KIND = { vote: 'Voto', abstain: 'Rever depois', photo_problem: 'Problema na foto', audit: 'Auditoria' };
 const PAGE = 60;
@@ -116,6 +117,8 @@ export function renderHistory(app, root, query = {}) {
           row.append(h('button', { class: 'btn small', style: { margin: '2px' }, onclick: () => app.revise(d.id, st, 'conflito', c.heads.map((x) => x.ev.id)) },
             `${label} (${hd.ev.device === app.device.id ? 'este aparelho' : 'outro aparelho'}, ${fmtDate(hd.ev.at)})`));
         }
+      } else if (!isOwner(app.access)) {
+        row.append(h('p', null, 'O catálogo aguarda revisão do administrador.'));
       } else if (c.kind === 'foto_principal') {
         row.append(h('p', null, `Foto principal de ${name(c.pid)}`));
         for (const hd of c.heads) {

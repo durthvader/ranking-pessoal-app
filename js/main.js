@@ -16,8 +16,11 @@ import { renderParticipants, openParticipant } from './ui/participants.js';
 import { renderVersions } from './ui/versions.js';
 import { renderSettings } from './ui/settings.js';
 import { renderMethod } from './ui/method.js';
+import { canUseRoute, assertWritableEvents, isOwner } from './access.js';
+import { renderGuests } from './ui/guests.js';
+import { renderCorrelation } from './ui/correlation.js';
 
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.2.0';
 const SESSION_GAP_MS = 30 * 60 * 1000;
 
 const ROUTES = {
@@ -30,6 +33,8 @@ const ROUTES = {
   versoes: { title: 'Versões', render: renderVersions },
   config: { title: 'Configurações', render: renderSettings },
   metodo: { title: 'Como funciona', render: renderMethod },
+  convidados: { title: 'Convidados', render: renderGuests },
+  correlacao: { title: 'Correlação', render: renderCorrelation },
 };
 const TOP_NAV = ['votar', 'ranking', 'progresso', 'chaveamento', 'historico', 'participantes', 'versoes', 'config'];
 const BOTTOM_NAV = ['votar', 'ranking', 'progresso', 'historico'];
@@ -46,7 +51,7 @@ function readConfig() {
   // O endereço do projeto vem de config.js (publicação). O localStorage só vale para cópias
   // do app publicadas sem config.js preenchido.
   const g = window.RP_CONFIG || {};
-  if (g.supabaseUrl && g.supabaseAnonKey) return { url: g.supabaseUrl, anonKey: g.supabaseAnonKey, fixed: true };
+  if (g.supabaseUrl && g.supabaseAnonKey) return { url: g.supabaseUrl, anonKey: g.supabaseAnonKey, registrationKey: g.registrationKey, fixed: true };
   const stored = localStorage.getItem('rp-supabase');
   if (stored) {
     try { const c = JSON.parse(stored); if (c.url && c.anonKey) return c; } catch { /* ignora */ }
@@ -66,7 +71,7 @@ function loadDevice() {
 }
 
 
-class App {
+export class App {
   constructor() {
     this.root = document.getElementById('app');
     this.listeners = new Map();
@@ -76,6 +81,8 @@ class App {
     this.cleanup = null;
     this.version = APP_VERSION;
     this.download = { running: false, done: 0, total: 0, fails: 0 };
+    this.access = { role: 'pending' };
+    this.accessRequests = [];
   }
 
   on(evt, fn) {
@@ -140,6 +147,16 @@ class App {
 
   async openData() {
     const uid = this.uid;
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(`rp-access-${uid}`) || 'null'); } catch { /* perfil será buscado no servidor */ }
+    if (this.remote?.uid && navigator.onLine) {
+      this.access = await this.remote.getAccess();
+      localStorage.setItem(`rp-access-${uid}`, JSON.stringify(this.access));
+    } else {
+      this.access = cached || { role: 'pending' };
+      if (this.remote) { this.remote.access = this.access; this.remote.catalogOwner = this.access.role === 'guest' ? this.access.host_id : null; }
+    }
+    if (!['owner', 'guest'].includes(this.access.role)) return this.showAwaitingAccess();
     if (uid) localStorage.setItem('rp-last-uid', uid);
     this.db = await LocalDB.open(`rp_${uid}`);
     const remoteForSync = this.remote || null;
@@ -168,6 +185,8 @@ class App {
     this.sync.start();
     this.engine.refresh();
     setTimeout(() => this.autoDownloadImages(), 4000);
+    this.refreshAccessRequests();
+    this.accessTimer = setInterval(() => this.refreshAccessRequests(), 30000);
     window.addEventListener('beforeunload', (e) => {
       if (this.syncStatus.mode === 'conta' && this.syncStatus.pendingEvents && navigator.onLine) {
         this.sync.syncNow();
@@ -194,10 +213,11 @@ class App {
 
   newEvent(type, data, { evalId = null } = {}) {
     this.touchSession();
-    return { id: uuid(), type, eval: evalId, data, device: this.device.id, session: this.sessionId, at: nowIso() };
+    return { id: uuid(), owner: this.uid, type, eval: evalId, data, device: this.device.id, session: this.sessionId, at: nowIso() };
   }
 
   async addEvents(evs) {
+    assertWritableEvents(this.access, evs, this.uid);
     const added = await this.db.putEvents(evs);
     if (added.length) {
       this.events.push(...added);
@@ -280,6 +300,7 @@ class App {
 
   // Grava uma foto vinda do aparelho ou de um link. Retorna o id da foto.
   async addPhoto(pid, blob, meta = {}) {
+    if (!isOwner(this.access)) throw new Error('A edição de fotos fica com o administrador.');
     const norm = await normalizeImage(blob, 1200, 0.86);
     const mini = await normalizeImage(norm.blob, 320, 0.8);
     const sha = await sha256Hex(norm.blob);
@@ -303,6 +324,7 @@ class App {
   }
 
   async addPhotoFromUrl(pid, url, meta = {}) {
+    if (!isOwner(this.access)) throw new Error('A edição de fotos fica com o administrador.');
     let blob = null, finalUrl = url, how = '';
     if (this.remote?.uid && navigator.onLine) {
       try {
@@ -373,7 +395,7 @@ class App {
     this.pill = h('button', { class: 'syncpill', title: 'Situação da sincronização', onclick: () => this.showSyncInfo() },
       h('span', { class: 'dot' }), h('span', { class: 'txt' }, '…'));
     this.topnav = h('nav', { class: 'topnav', 'aria-label': 'Seções' },
-      TOP_NAV.map((k) => h('a', { href: `#/${k}`, 'data-route': k }, ROUTES[k].title)));
+      [...TOP_NAV, 'convidados', 'correlacao'].filter(k => canUseRoute(this.access, k)).map((k) => h('a', { href: `#/${k}`, 'data-route': k }, ROUTES[k].title)));
     const brand = h('div', { class: 'brand' }, icon('logo'), h('span', { class: 'full' }, 'Ranking pessoal'));
     const top = h('header', { class: 'topbar' }, brand, this.topnav, h('div', { class: 'spacer' }), this.pill);
     this.main = h('main', { id: 'main' });
@@ -385,8 +407,9 @@ class App {
   }
 
   showMore() {
-    const items = ['chaveamento', 'participantes', 'versoes', 'config', 'metodo'];
-    const body = h('div', { class: 'col' }, items.map((k) => h('a', { class: 'btn', href: `#/${k}`, style: { justifyContent: 'flex-start' }, onclick: () => dlg.close() }, ROUTES[k].title)));
+    const items = ['convidados', 'correlacao', 'chaveamento', 'participantes', 'versoes', 'config', 'metodo'].filter(k => canUseRoute(this.access, k));
+    const body = h('div', { class: 'col' }, items.map((k) => h('a', { class: 'btn', href: `#/${k}`, style: { justifyContent: 'flex-start' }, onclick: () => dlg.close() }, ROUTES[k].title)),
+      h('button', { class: 'btn', onclick: () => this.signOut() }, 'Sair da conta'));
     const dlg = modal('Mais seções', body, [{ label: 'Fechar' }]);
   }
 
@@ -429,6 +452,9 @@ class App {
       return;
     }
     if (!ROUTES[name]) name = 'votar';
+    if (!canUseRoute(this.access, name)) {
+      history.replaceState(null, '', '#/votar'); name = 'votar';
+    }
     closeDrawer();
     // avisos e ampliações abertos pertencem à tela anterior
     for (const el of document.querySelectorAll('.overlay, .zoomview')) el.remove();
@@ -498,7 +524,8 @@ class App {
           h('label', { class: 'field' }, h('span', null, 'Senha'), pass),
           h('button', { class: 'btn primary', type: 'submit' }, 'Entrar')),
         h('div', { class: 'row', style: { marginTop: '12px' } },
-          // projeto pessoal publicado: o cadastro fica desligado no Supabase, então não há botão de criar conta
+          this.config?.registrationKey ? h('button', { class: 'btn', onclick: () => this.showRegistration() }, 'Solicitar acesso') : null,
+          // Cópias sem configuração fixa podem manter o cadastro nativo do Supabase.
           this.config?.fixed ? null : h('button', { class: 'btn small', onclick: () => busy(async () => {
             if (pass.value.length < 8) throw new Error('Use uma senha com pelo menos 8 caracteres.');
             const r = await this.remote.signUp(email.value.trim(), pass.value);
@@ -523,6 +550,74 @@ class App {
         try { await this.remote.updatePassword(pass.value); toast('Senha alterada.'); } catch (e) { toast(e.message, { type: 'err' }); return false; }
       } },
     ]);
+  }
+
+  showRegistration() {
+    clear(this.root);
+    const name = h('input', { autocomplete: 'name', required: true, maxlength: '80' });
+    const email = h('input', { type: 'email', autocomplete: 'email', required: true });
+    const password = h('input', { type: 'password', autocomplete: 'new-password', required: true, minlength: '10', maxlength: '128' });
+    const repeat = h('input', { type: 'password', autocomplete: 'new-password', required: true });
+    const error = h('p', { class: 'notice err', role: 'alert', hidden: true });
+    const submit = h('button', { class: 'btn primary', type: 'submit' }, 'Cadastrar e solicitar acesso');
+    const form = h('form', { class: 'form', onsubmit: async (e) => {
+      e.preventDefault(); error.hidden = true;
+      if (password.value !== repeat.value) { error.textContent = 'As senhas precisam ser iguais.'; error.hidden = false; return; }
+      submit.disabled = true;
+      try {
+        await this.remote.requestAccess({ email: email.value.trim(), password: password.value, name: name.value.trim() }, this.config.registrationKey);
+        await this.remote.signIn(email.value.trim(), password.value);
+        password.value = repeat.value = ''; location.reload();
+      } catch (ex) { error.textContent = ex.message; error.hidden = false; submit.disabled = false; }
+    } },
+      h('label', { class: 'field' }, h('span', null, 'Seu nome'), name),
+      h('label', { class: 'field' }, h('span', null, 'Seu e-mail'), email),
+      h('label', { class: 'field' }, h('span', null, 'Senha (mínimo 10 caracteres)'), password),
+      h('label', { class: 'field' }, h('span', null, 'Repita a senha'), repeat), error, submit);
+    this.root.append(h('div', { class: 'login' }, h('div', { class: 'card' }, h('h1', null, 'Solicitar acesso'),
+      h('p', null, 'Crie seu acesso para avaliar as mesmas participantes. Seus votos e seu ranking serão independentes. O administrador precisa aprovar seu cadastro.'),
+      form, h('button', { class: 'btn ghost', onclick: () => this.showLogin() }, 'Já tenho conta · Entrar'))));
+  }
+
+  showAwaitingAccess() {
+    clear(this.root);
+    const rejected = this.access.role === 'rejected';
+    this.root.append(h('div', { class: 'login' }, h('div', { class: 'card' },
+      h('h1', null, rejected ? 'Acesso não autorizado' : 'Aguardando aprovação'),
+      h('p', null, this.access.email || ''),
+      h('p', null, rejected ? 'O administrador ainda não autorizou este acesso.' : 'Seu cadastro foi recebido. Assim que o administrador aprovar, você poderá começar sua avaliação.'),
+      h('button', { class: 'btn primary', onclick: () => location.reload() }, 'Verificar aprovação'),
+      h('button', { class: 'btn ghost', onclick: () => this.signOut() }, 'Sair da conta'))));
+    const timer = setInterval(async () => {
+      if (!navigator.onLine || !this.remote?.uid) return;
+      try { const updated = await this.remote.getAccess(); if (updated.role !== this.access.role) { clearInterval(timer); location.reload(); } } catch { /* tenta de novo no próximo ciclo */ }
+    }, 15000);
+  }
+
+  async signOut() {
+    await this.sync?.refreshCounts();
+    if (this.syncStatus.pendingEvents && navigator.onLine) await this.sync?.syncNow();
+    if (this.syncStatus.pendingEvents) { toast('Aguarde a sincronização das escolhas antes de sair.'); return; }
+    localStorage.removeItem('rp-last-uid');
+    await this.remote?.signOut();
+    location.reload();
+  }
+
+  async refreshAccessRequests() {
+    if (!navigator.onLine || !this.remote?.uid) return;
+    try {
+      const current = await this.remote.getAccess();
+      if (current.role !== this.access.role) { location.reload(); return; }
+      if (!isOwner(this.access)) return;
+      const known = new Set(this.accessRequests.map(r => r.user_id));
+      const requests = await this.remote.listAccessRequests();
+      const pending = requests.filter(r => r.role === 'pending');
+      for (const request of pending.filter(r => !known.has(r.user_id))) toast(`Pedido de acesso: ${request.display_name || request.email}`, { ms: 15000, action: { label: 'Ver pedidos', fn: () => this.go('convidados') } });
+      this.accessRequests = requests;
+      const link = this.topnav?.querySelector('[data-route="convidados"]');
+      if (link) link.textContent = pending.length ? `Convidados (${pending.length})` : 'Convidados';
+      this.emit('accessRequests', requests);
+    } catch { /* preserva os dados locais quando a conexão oscila */ }
   }
 }
 
