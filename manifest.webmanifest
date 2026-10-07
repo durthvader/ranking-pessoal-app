@@ -1,0 +1,16 @@
+{
+  "name": "Ranking pessoal",
+  "short_name": "Ranking",
+  "description": "Ranking pessoal de preferência visual por comparações em pares.",
+  "lang": "pt-BR",
+  "start_url": "./#/votar",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#121418",
+  "theme_color": "#1b1e24",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
