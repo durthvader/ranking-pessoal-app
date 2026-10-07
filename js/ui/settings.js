@@ -24,7 +24,7 @@ export function renderSettings(app, root) {
       return h('label', { class: 'check' }, c, h('span', null, label, help ? h('div', { class: 'help' }, help) : null));
     };
     const layout = h('select', { onchange: () => app.setPrefs({ layout: layout.value }) },
-      h('option', { value: 'auto', selected: p.layout === 'auto' }, 'Automática (uma acima da outra no celular em pé)'),
+      h('option', { value: 'auto', selected: p.layout === 'auto' }, 'Comparação lado a lado (tela cheia adapta à orientação)'),
       h('option', { value: 'lado', selected: p.layout === 'lado' }, 'Sempre lado a lado'),
       h('option', { value: 'pilha', selected: p.layout === 'pilha' }, 'Sempre uma acima da outra'));
     return section('Votação',

@@ -3,6 +3,7 @@ import { photoImg, badge, openDrawer, closeDrawer, toast, modal, confirmDialog, 
 import { eligibilityIssues, evalSettings } from '../store.js';
 import { Z_OF_LEVEL } from './ranking.js';
 import { restoreBackup, importSpreadsheet } from '../backup.js';
+import { imageSearchControls } from './image-search.js';
 
 const ORIGIN_LABEL = {
   'importacao:planilha': 'link da planilha',
@@ -52,7 +53,7 @@ export function openParticipant(app, pid) {
       const big = photoImg(app, ph, { cls: '', full: true, alt: p.name });
       big.style.cssText = 'width:100%;max-height:52vh;object-fit:contain;background:var(--photo-bg);border-radius:12px;display:block;cursor:zoom-in';
       big.addEventListener('click', () => { if (big.src) window.open(big.src, '_blank'); });
-      root.append(big);
+      root.append(big, imageSearchControls(() => p.name).el);
       if (r && m) {
         root.append(h('div', { class: 'grid cols-3', style: { margin: '12px 0' } },
           stat('Posição estimada', `${r.pos}º`, `faixa provável ${r.lo}–${r.hi}`),

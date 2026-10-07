@@ -2,6 +2,7 @@ import { h, clear, fmtInt, fmtPct } from '../util.js';
 import { icon, toast, modal, choiceDialog } from './common.js';
 import { PHASE_LABEL, REASON_TEXT } from '../engine.js';
 import { evalSettings } from '../store.js';
+import { createPhotoViewer } from './photo-viewer.js';
 
 const PROBLEMS = [
   ['nao_carrega', 'A foto não carrega'],
@@ -15,9 +16,22 @@ const PROBLEMS = [
 ];
 
 export function renderVote(app, root) {
+  document.body.classList.add('vote-screen');
   const wrap = h('div', { class: 'vote' });
   root.append(wrap);
   const st = { cur: null, mode: localStorage.getItem('rp-vote-mode') || 'normal', audit: { left: 0, since: 0 }, busy: false, shownBudget: false };
+  const viewer = createPhotoViewer({
+    getPair: () => st.cur,
+    getName: (side) => app.state.participants.get(side === 'L' ? st.cur?.left : st.cur?.right)?.name || '',
+    showNames: () => !!app.state.prefs.showNames,
+    getUrl: (side, p) => {
+      const ph = app.state.photos.get(side === 'L' ? p.pl : p.pr);
+      return app.images.url(ph?.path, ph?.external_url || null);
+    },
+    isReady: () => !!st.cur?.ready && !st.cur.locked && !st.busy,
+    onChoose: choose,
+    onAction: (action) => ({ later, problem, undo })[action](),
+  });
   const head = h('div', { class: 'vote-head' });
   const pair = h('div', { class: 'pair' });
   const actions = h('div', { class: 'vote-actions' });
@@ -32,8 +46,7 @@ export function renderVote(app, root) {
     const loading = h('div', { class: 'loading' }, 'Carregando…');
     const label = h('div', { class: 'label', hidden: true });
     const sideTag = h('div', { class: 'side' });
-    const zoom = h('button', { class: 'zoom', 'aria-label': 'Ampliar foto', title: 'Ampliar', onclick: (e) => { e.stopPropagation(); openZoom(side); } }, icon('zoom'));
-    const el = h('div', { class: 'frame', role: 'button', tabindex: '0', 'aria-label': side === 'L' ? 'Escolher a foto da esquerda' : 'Escolher a foto da direita' }, loading, img, label, sideTag, zoom);
+    const el = h('div', { class: 'frame', role: 'button', tabindex: '0', 'aria-label': side === 'L' ? 'Escolher a foto da esquerda' : 'Escolher a foto da direita' }, loading, img, label, sideTag);
     el.addEventListener('click', () => choose(side));
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(side); } });
     return { el, img, loading, label, sideTag };
@@ -41,16 +54,15 @@ export function renderVote(app, root) {
 
   const btn = (label, ic, fn, kbd, cls = '') => h('button', { class: `btn ${cls}`, onclick: fn }, ic ? icon(ic) : null, label, kbd ? h('span', { class: 'kbd' }, kbd) : null);
   const bLater = btn('Rever depois', 'depois', () => later(), 'S');
-  const bProblem = btn('Problema na foto', 'problema', () => problem(), 'P');
-  const bUndo = btn('Desfazer', 'desfazer', () => undo(), 'Z');
+  const bZoom = btn('Tela cheia', 'zoom', () => openZoom('L'), null, 'primary');
   const bMore = btn('Mais', 'mais', () => more(), null, 'ghost');
-  actions.append(bLater, bProblem, bUndo, bMore);
+  actions.append(bLater, bZoom, bMore);
 
   function layout() {
     const pref = app.state.prefs.layout;
-    const narrow = window.innerWidth < 720 && window.innerHeight > window.innerWidth * 1.05;
-    const stack = pref === 'pilha' || (pref === 'auto' && narrow);
+    const stack = pref === 'pilha';
     pair.classList.toggle('stack', stack);
+    pair.classList.toggle('whole-photo', localStorage.getItem('rp-photo-fit') === 'inteira');
     frames.L.sideTag.textContent = stack ? 'de cima' : 'esquerda';
     frames.R.sideTag.textContent = stack ? 'de baixo' : 'direita';
     return stack ? 'pilha' : 'lado';
@@ -72,7 +84,7 @@ export function renderVote(app, root) {
     head.append(
       h('span', null, phase),
       h('div', { class: 'bar' }, h('span', { style: { width: `${(pct * 100).toFixed(1)}%` } })),
-      h('span', null, h('strong', null, fmtInt(valid)), ` de ${fmtInt(settings.budget)} escolhas válidas`),
+      h('span', { class: 'vote-count', title: `${fmtInt(valid)} de ${fmtInt(settings.budget)} escolhas válidas` }, h('strong', null, fmtInt(valid)), ` / ${fmtInt(settings.budget)}`),
     );
   }
 
@@ -80,6 +92,7 @@ export function renderVote(app, root) {
     clear(reason);
     if (!st.cur || !app.state.prefs.showReason) return;
     const r = st.cur.reason;
+    reason.classList.toggle('coverage-reason', r.kind === 'cobertura');
     let txt = (REASON_TEXT[r.kind] || (() => ''))(r);
     if (app.state.prefs.showScores && r.swap != null) txt += ` · chance de ordem invertida ${fmtPct(r.swap)}`;
     if (r.deferred) txt += ` · par adiado ${r.deferred}× antes`;
@@ -87,6 +100,8 @@ export function renderVote(app, root) {
   }
 
   function emptyState(res) {
+    st.cur = null;
+    viewer.update();
     clear(pair);
     pair.classList.remove('stack');
     const s = app.state;
@@ -133,31 +148,35 @@ export function renderVote(app, root) {
       const part = app.state.participants.get(pid);
       f.label.textContent = part?.name || '';
       f.label.hidden = !app.state.prefs.showNames;
+      f.el.setAttribute('aria-label', `Escolher ${app.state.prefs.showNames && part?.name || (side === 'L' ? 'a primeira foto' : 'a segunda foto')}`);
     }
+    viewer.update();
     renderHead();
     showReason();
     const load = (side) => new Promise((resolve) => {
       const f = frames[side];
       const photoId = side === 'L' ? p.pl : p.pr;
       const ph = app.state.photos.get(photoId);
-      app.images.url(ph?.path, ph?.external_url || null).then((url) => {
+      Promise.resolve().then(() => app.images.url(ph?.path, ph?.external_url || null)).then((url) => {
         if (st.cur !== p) return resolve(false);
         if (!url) { f.loading.textContent = 'A foto não carregou.'; return resolve(false); }
-        f.img.onload = () => { f.img.hidden = false; f.loading.hidden = true; resolve(true); };
-        f.img.onerror = () => { f.loading.textContent = 'A foto não carregou.'; resolve(false); };
+        f.img.onload = () => { if (st.cur !== p) return resolve(false); f.img.hidden = false; f.loading.hidden = true; resolve(true); };
+        f.img.onerror = () => { if (st.cur === p) f.loading.textContent = 'A foto não carregou.'; resolve(false); };
         f.img.src = url;
-      });
+      }).catch(() => { if (st.cur === p) f.loading.textContent = 'A foto não carregou.'; resolve(false); });
     });
     const [okL, okR] = await Promise.all([load('L'), load('R')]);
     if (st.cur !== p) return;
     if (!okL || !okR) {
       p.failed = true;
       toast('Uma das fotos não carregou. Use "Problema na foto" ou pule o par em "Mais".', { ms: 6000 });
+      viewer.update();
       return;
     }
     p.shownAt = new Date().toISOString();
     p.shownMs = performance.now();
     p.ready = true;
+    viewer.update();
     prefetchNext();
   }
 
@@ -248,6 +267,7 @@ export function renderVote(app, root) {
     if (performance.now() - p.shownMs < 250) return;
     p.locked = true;
     st.busy = true;
+    viewer.setBusy(true);
     frames[side].el.classList.add('chosen');
     const w = side === 'L' ? p.left : p.right;
     try {
@@ -256,6 +276,7 @@ export function renderVote(app, root) {
       toast('Não foi possível salvar: ' + e.message, { type: 'err' });
       p.locked = false;
       st.busy = false;
+      viewer.setBusy(false);
       return;
     }
     setTimeout(() => { st.busy = false; nextPresentation(); }, 140);
@@ -275,8 +296,8 @@ export function renderVote(app, root) {
     const p = st.cur;
     if (!p || p.locked || st.busy) return;
     const target = await choiceDialog('Problema na foto', 'Qual foto tem problema?', [
-      { label: st.cur.layout === 'pilha' ? 'A de cima' : 'A da esquerda', value: 'L' },
-      { label: st.cur.layout === 'pilha' ? 'A de baixo' : 'A da direita', value: 'R' },
+      { label: `Foto 1${app.state.prefs.showNames ? ' · ' + app.state.participants.get(p.left)?.name : ''}`, value: 'L' },
+      { label: `Foto 2${app.state.prefs.showNames ? ' · ' + app.state.participants.get(p.right)?.name : ''}`, value: 'R' },
       { label: 'As duas', value: 'LR' },
     ]);
     if (!target) return;
@@ -315,6 +336,9 @@ export function renderVote(app, root) {
     const settings = evalSettings(app.state);
     const rs = st.mode === 'revisao' ? null : app.engine.reviewSet();
     const v = await choiceDialog('Mais opções', null, [
+      { label: 'Problema na foto', value: 'problema' },
+      { label: 'Desfazer última escolha', value: 'desfazer' },
+      { label: localStorage.getItem('rp-photo-fit') === 'inteira' ? 'Usar recorte 3×4 nos cartões' : 'Mostrar fotos inteiras nos cartões', value: 'enquadramento' },
       st.mode === 'revisao'
         ? { label: 'Encerrar revisão do 1º lugar', value: 'sair_revisao' }
         : { label: 'Revisão do 1º lugar', value: 'revisao', hint: rs ? `${rs.contenders.length} candidatas + ${rs.under.length} pouco avaliadas` : '' },
@@ -322,7 +346,12 @@ export function renderVote(app, root) {
       { label: 'Pular este par sem registrar', value: 'pular' },
       { label: 'Atalhos do teclado', value: 'atalhos' },
     ]);
-    if (v === 'revisao') {
+    if (v === 'problema') problem();
+    else if (v === 'desfazer') undo();
+    else if (v === 'enquadramento') {
+      localStorage.setItem('rp-photo-fit', localStorage.getItem('rp-photo-fit') === 'inteira' ? 'recorte' : 'inteira');
+      layout();
+    } else if (v === 'revisao') {
       st.mode = 'revisao';
       localStorage.setItem('rp-vote-mode', 'revisao');
       toast('Revisão do 1º lugar: os pares vêm das candidatas plausíveis.');
@@ -359,88 +388,7 @@ export function renderVote(app, root) {
   }
 
   function openZoom(side) {
-    const p = st.cur;
-    if (!p) return;
-    let cur = side;
-    const img = h('img', { alt: '', referrerpolicy: 'no-referrer', draggable: 'false' });
-    const stage = h('div', { class: 'stage' }, img, h('div', { class: 'hint' }, 'Pinça, roda do mouse ou duplo toque para ampliar'));
-    const title = h('span', { style: { color: '#ddd', alignSelf: 'center' } });
-    const view = h('div', { class: 'zoomview', role: 'dialog', 'aria-modal': 'true' }, stage,
-      h('div', { class: 'bar2' },
-        h('button', { class: 'btn', onclick: () => show(cur === 'L' ? 'R' : 'L') }, icon(cur === 'L' ? 'dir' : 'esq'), 'Outra foto'),
-        title,
-        h('button', { class: 'btn primary', onclick: () => { close(); choose(cur); } }, 'Escolher esta'),
-        h('button', { class: 'btn', onclick: () => close() }, icon('fechar'), 'Fechar')));
-    document.body.append(view);
-    let scale = 1, tx = 0, ty = 0;
-    const apply = () => { img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`; };
-    const reset = () => { scale = 1; tx = 0; ty = 0; apply(); };
-    // Amplia mantendo fixo o ponto sob o cursor (transform-origin 0 0):
-    // ponto da tela = base + t + s·u  ⇒  t' = (c − base)(1 − k) + k·t, com k = s'/s.
-    const zoomAt = (factor, cx, cy) => {
-      const r = img.getBoundingClientRect();
-      const bx = r.left - tx, by = r.top - ty;
-      const ns = Math.min(8, Math.max(1, scale * factor));
-      const k = ns / scale;
-      tx = (cx - bx) * (1 - k) + k * tx;
-      ty = (cy - by) * (1 - k) + k * ty;
-      scale = ns;
-      if (scale === 1) { tx = 0; ty = 0; }
-      apply();
-    };
-    function show(s) {
-      cur = s;
-      reset();
-      const ph = app.state.photos.get(s === 'L' ? p.pl : p.pr);
-      app.images.url(ph?.path, ph?.external_url || null).then((u) => { if (u) img.src = u; });
-      title.textContent = p.layout === 'pilha' ? (s === 'L' ? 'Foto de cima' : 'Foto de baixo') : (s === 'L' ? 'Foto da esquerda' : 'Foto da direita');
-      if (app.state.prefs.showNames) title.textContent += ' · ' + (app.state.participants.get(s === 'L' ? p.left : p.right)?.name || '');
-      view.querySelector('.bar2 .btn').replaceChildren(icon(s === 'L' ? 'dir' : 'esq'), 'Outra foto');
-    }
-    const pointers = new Map();
-    let lastDist = 0, lastTap = 0, panStart = null;
-    stage.addEventListener('pointerdown', (e) => {
-      stage.setPointerCapture(e.pointerId);
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointers.size === 1) {
-        const now = Date.now();
-        if (now - lastTap < 300) { if (scale > 1) reset(); else zoomAt(2.5, e.clientX, e.clientY); lastTap = 0; } else lastTap = now;
-        panStart = { x: e.clientX, y: e.clientY, tx, ty };
-      }
-      if (pointers.size === 2) {
-        const [a, b] = [...pointers.values()];
-        lastDist = Math.hypot(a.x - b.x, a.y - b.y);
-      }
-    });
-    stage.addEventListener('pointermove', (e) => {
-      if (!pointers.has(e.pointerId)) return;
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointers.size === 2) {
-        const [a, b] = [...pointers.values()];
-        const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (lastDist > 0) zoomAt(d / lastDist, (a.x + b.x) / 2, (a.y + b.y) / 2);
-        lastDist = d;
-      } else if (pointers.size === 1 && panStart && scale > 1) {
-        tx = panStart.tx + (e.clientX - panStart.x);
-        ty = panStart.ty + (e.clientY - panStart.y);
-        apply();
-      }
-    });
-    const up = (e) => { pointers.delete(e.pointerId); if (pointers.size < 2) lastDist = 0; if (!pointers.size) panStart = null; };
-    stage.addEventListener('pointerup', up);
-    stage.addEventListener('pointercancel', up);
-    stage.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX, e.clientY); }, { passive: false });
-    const onKey = (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); close(); }
-      else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); show(cur === 'L' ? 'R' : 'L'); }
-      else if (e.key === 'Enter') { e.preventDefault(); close(); choose(cur); }
-      else if (e.key === '+' || e.key === '=') zoomAt(1.25, innerWidth / 2, innerHeight / 2);
-      else if (e.key === '-') zoomAt(0.8, innerWidth / 2, innerHeight / 2);
-      e.stopPropagation();
-    };
-    document.addEventListener('keydown', onKey, true);
-    function close() { document.removeEventListener('keydown', onKey, true); view.remove(); }
-    show(side);
+    if (st.cur) viewer.open(side);
   }
 
   function onKey(e) {
@@ -479,6 +427,8 @@ export function renderVote(app, root) {
   }
   nextPresentation();
   return () => {
+    viewer.close();
+    document.body.classList.remove('vote-screen');
     document.removeEventListener('keydown', onKey);
     window.removeEventListener('resize', onResize);
     offModel();

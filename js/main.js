@@ -17,7 +17,7 @@ import { renderVersions } from './ui/versions.js';
 import { renderSettings } from './ui/settings.js';
 import { renderMethod } from './ui/method.js';
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 const SESSION_GAP_MS = 30 * 60 * 1000;
 
 const ROUTES = {
