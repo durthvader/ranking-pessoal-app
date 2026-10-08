@@ -276,7 +276,8 @@ body.vote-screen main { min-height: 0; }
 .frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; display: block; pointer-events: none; -webkit-user-drag: none; }
 .frame-choice { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; touch-action: manipulation; }
 .frame-choice:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
-.pair.whole-photo .frame img { object-fit: contain; object-position: center; }
+.frame img.has-framing { inset: auto; left: var(--framing-left); top: var(--framing-top); width: var(--framing-width); height: var(--framing-height); object-fit: fill; }
+.pair.whole-photo .frame img { inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; }
 .frame:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .frame.chosen { border-color: var(--accent); transform: scale(0.99); }
 .frame .label {

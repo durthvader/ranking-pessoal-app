@@ -3,6 +3,7 @@ import { icon, toast, modal, choiceDialog } from './common.js';
 import { PHASE_LABEL, REASON_TEXT } from '../engine.js';
 import { evalSettings } from '../store.js';
 import { createPhotoViewer } from './photo-viewer.js';
+import { applyPhotoFraming } from './photo-framing.js';
 import { isGuest } from '../access.js';
 import { imageSearchControls, imageSearchShortcut } from './image-search.js';
 
@@ -164,6 +165,7 @@ export function renderVote(app, root) {
       const f = frames[side];
       const photoId = side === 'L' ? p.pl : p.pr;
       const ph = app.state.photos.get(photoId);
+      applyPhotoFraming(f.img, ph);
       Promise.resolve().then(() => app.images.url(ph?.path, ph?.external_url || null)).then((url) => {
         if (st.cur !== p) return resolve(false);
         if (!url) { f.loading.textContent = 'A foto não carregou.'; return resolve(false); }
