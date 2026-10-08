@@ -1,6 +1,6 @@
 export const CATALOG_TYPES = new Set(['participant_created', 'photo_added', 'photo_primary', 'photo_review', 'dup_review']);
 export const GUEST_EVENT_TYPES = new Set(['vote', 'audit', 'abstain', 'revise']);
-export const GUEST_ROUTES = new Set(['votar', 'ranking', 'progresso', 'historico', 'metodo']);
+export const GUEST_ROUTES = new Set(['votar', 'ranking', 'progresso', 'historico', 'metodo', 'correlacao']);
 
 export function isCatalogEvent(event) {
   return CATALOG_TYPES.has(event.type) || event.type === 'participant_edit' && ['name', 'status', 'era'].includes(event.data?.field);

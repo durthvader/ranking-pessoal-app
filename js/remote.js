@@ -183,6 +183,25 @@ export class Remote {
     return events;
   }
 
+  async correlationAccounts() {
+    const { data, error } = await this.client.rpc('ranking_correlation_accounts');
+    if (error) throw traduzErro(error);
+    return data || [];
+  }
+
+  async correlationEvents(user) {
+    const events = [];
+    let since = 0;
+    for (;;) {
+      const { data, error } = await this.client.rpc('ranking_correlation_events', { p_user: user, p_since: since, p_limit: 1000 });
+      if (error) throw traduzErro(error);
+      if (!data?.length) break;
+      events.push(...data); since = data.at(-1).seq;
+      if (data.length < 1000) break;
+    }
+    return events;
+  }
+
   async requestAccess({ email, password, name }, registrationKey) {
     const response = await fetch(`${this.url}/functions/v1/solicitar-acesso`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', apikey: registrationKey, Authorization: `Bearer ${registrationKey}` },
