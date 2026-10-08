@@ -60,6 +60,9 @@ export function renderSettings(app, root) {
       sel('photoPolicy', 'Ao trocar a foto principal', [['descartar', 'Votos da foto anterior saem do cálculo'], ['manter', 'Votos anteriores continuam valendo']]),
       sel('countAudits', 'Votos de auditoria no cálculo', [['false', 'Não contam (só consistência)'], ['true', 'Contam como votos']]),
       sel('includePendingPhotos', 'Fotos aguardando confirmação', [['false', 'Ficam fora dos confrontos'], ['true', 'Entram nos confrontos']]),
+      sel('freezeEnabled', 'Congelar quem acumula derrotas', [['true', 'Sim: sai dos novos confrontos'], ['false', 'Não']]),
+      num('freezeMargin', 'Derrotas a mais que vitórias para congelar', { min: 1, max: 50, step: 1 }),
+      num('freezeMaxWins', 'Congelar só com até (vitórias)', { min: 0, max: 100, step: 1 }),
       num('wTop', 'Peso da disputa pelo 1º lugar', { min: 0, max: 20, step: 0.5 }),
       num('wUnder', 'Peso das pouco avaliadas', { min: 0, max: 20, step: 0.5 }),
       num('wCross', 'Peso dos confrontos entre faixas', { min: 0, max: 20, step: 0.1 }),
@@ -85,6 +88,7 @@ export function renderSettings(app, root) {
       if (!g.length) { toast('Informe ao menos um limite de faixa.', { type: 'err' }); return; }
       vals.groups = [...new Set(g)];
       if (vals.sigma <= 0) { toast('σ precisa ser maior que zero.', { type: 'err' }); return; }
+      if (!(vals.freezeMargin >= 1) || !(vals.freezeMaxWins >= 0)) { toast('Use números inteiros positivos na regra de congelamento.', { type: 'err' }); return; }
       await app.setEvalSettings(vals);
       toast('Configurações da avaliação salvas. O ranking será recalculado.');
     } }, 'Salvar configurações da avaliação');

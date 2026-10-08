@@ -10,6 +10,10 @@ export const DEFAULT_EVAL_SETTINGS = {
   photoPolicy: 'descartar', // ao trocar a foto principal: 'descartar' votos da foto anterior | 'manter'
   countAudits: false, // votos de auditoria entram no cálculo?
   includePendingPhotos: false, // fotos ainda não confirmadas entram nos confrontos?
+  freezeEnabled: true, // congela quem acumula derrotas: sai dos novos confrontos e continua no cálculo
+  freezeMargin: 6, // derrotas a mais que vitórias para congelar
+  freezeMaxWins: 4, // a regra só vale para quem tem até esta quantidade de vitórias
+  freezeOverrides: {}, // decisões manuais por participante: { pid: { mode: 'congelada' | 'liberada', from } }
   wTop: 6, // peso da disputa pelo 1º lugar (escolhido nas simulações)
   wUnder: 1.5, // peso de participantes pouco avaliadas
   wCross: 0.3, // peso de confrontos entre faixas
@@ -43,6 +47,9 @@ export const SETTINGS_HELP = {
   photoPolicy: 'Quando a foto principal muda, os votos feitos com a foto anterior podem sair do cálculo ou continuar valendo.',
   countAudits: 'Votos de auditoria repetem pares já vistos. Por padrão servem só para medir consistência.',
   includePendingPhotos: 'Fotos trocadas automaticamente na importação ficam fora dos confrontos até você confirmar.',
+  freezeEnabled: 'Quem chega à diferença de derrotas abaixo (com até o limite de vitórias) sai dos novos confrontos e continua no ranking e no cálculo. Uma vez congelada, fica assim até a foto principal mudar ou até você descongelar na ficha da participante.',
+  freezeMargin: 'Derrotas a mais que vitórias. Com 6, congelam os placares 0-6, 1-7, 2-8, 3-9 e 4-10, e também os piores, como 0-8.',
+  freezeMaxWins: 'A regra só vale para quem tem até esta quantidade de vitórias.',
   wTop: 'Prioridade para pares que podem mudar o 1º lugar.',
   reviewAuto: 'Perto do fim do orçamento, os pares passam a vir das candidatas ao 1º lugar e das pouco avaliadas que ainda podem alcançar a líder.',
   reviewFrom: 'Fração do orçamento em que a etapa de revisão começa (0,75 = 3.000 de 4.000).',

@@ -70,6 +70,7 @@ export function materialize(rawEvents) {
   const evals = new Map();
   const decisionsById = new Map();
   const decisionsList = [];
+  const primaryMarks = new Map(); // id do evento de foto principal → decisões registradas antes dele
   const importReports = [];
   const problemReports = [];
   const resolvedReports = new Set();
@@ -102,6 +103,7 @@ export function materialize(rawEvents) {
         break;
       }
       case 'photo_primary':
+        primaryMarks.set(ev.id, decisionsList.length);
         chains.rev(`pp:${d.pid}`, ev, d.photo);
         break;
       case 'photo_review':
@@ -144,7 +146,7 @@ export function materialize(rawEvents) {
             w: d.w ?? null, side: d.side, layout: d.layout, phase: d.phase, reason: d.reason,
             of: d.of ?? null, target: d.target, problem: d.problem, note: d.note,
             at: ev.at, seq: ev.seq ?? null, device: ev.device, session: ev.session,
-            shown: d.shown, ms: d.ms, pending: !!ev.pending,
+            shown: d.shown, ms: d.ms, pending: !!ev.pending, ord: decisionsList.length,
           };
           decisionsById.set(ev.id, dec);
           decisionsList.push(dec);
@@ -167,6 +169,9 @@ export function materialize(rawEvents) {
     p.primaryConflict = pr.conflict;
     if (pr.conflict) conflicts.push({ key: `pp:${p.pid}`, kind: 'foto_principal', pid: p.pid, heads: pr.heads });
     p.primaryHistory = pr.revs.map((r) => ({ photo: r.value, at: r.ev.at, device: r.ev.device, id: r.ev.id }));
+    // decisões registradas antes da foto principal atual (0 quando a foto veio na importação)
+    const head = pr.heads[pr.heads.length - 1];
+    p.primaryMark = head ? (primaryMarks.get(head.ev.id) ?? 0) : 0;
   }
   for (const ph of photos.values()) {
     const p = participants.get(ph.pid);
@@ -220,6 +225,7 @@ export function materialize(rawEvents) {
   return {
     participants, photos, evals, decisions, decisionsById, conflicts, dupGroups, prefs, importReports,
     activeEval: active[0]?.id || null,
+    decisionCount: decisionsList.length,
     counts: { events: events.length, pending },
     headIds: (key) => chains.headIds(key),
   };
@@ -274,7 +280,64 @@ export function eligibilityIssues(state, p, settings, available) {
     if (available && !available.has(ph.photo)) issues.push('foto não baixada neste aparelho');
   }
   if (p.primaryConflict) issues.push('troca de foto em conflito');
+  const fz = p.status === 'excluida' ? null : frozenInfo(state).get(p.pid);
+  if (fz) issues.push(fz.manual ? 'congelada manualmente' : `congelada (chegou a ${fz.w}-${fz.l})`);
   return issues;
+}
+
+export const isFrozenIssue = (issue) => issue.startsWith('congelada');
+
+// Regra de congelamento. Percorre os votos válidos na ordem em que chegaram e congela quem chega a
+// `freezeMargin` derrotas a mais que vitórias com até `freezeMaxWins` vitórias. A congelada continua no
+// cálculo e no ranking; só deixa de entrar em novos confrontos. A regra vale até a foto principal mudar
+// depois do congelamento ou até a liberação manual: a contagem então recomeça a partir dali.
+// Decisões manuais ficam em settings.freezeOverrides: { pid: { mode: 'congelada' | 'liberada', from } },
+// em que `from` é o número de decisões registradas no momento da liberação.
+const frozenCache = new WeakMap();
+
+export function frozenInfo(state, evalId = state.activeEval) {
+  let porAval = frozenCache.get(state);
+  if (!porAval) { porAval = new Map(); frozenCache.set(state, porAval); }
+  if (porAval.has(evalId)) return porAval.get(evalId);
+  const settings = evalSettings(state, evalId);
+  const overrides = settings.freezeOverrides || {};
+  const margin = settings.freezeMargin ?? 6;
+  const maxWins = settings.freezeMaxWins ?? 4;
+  const votes = validVotes(state, evalId).slice().sort((a, b) => (a.ord ?? 0) - (b.ord ?? 0));
+  // primeira vez em que cada participante atinge a regra, contando a partir de start.get(pid)
+  const scan = (start) => {
+    const rec = new Map(), hit = new Map();
+    for (const d of votes) {
+      const o = d.ord ?? 0;
+      for (const pid of [d.a, d.b]) {
+        if (hit.has(pid) || !start.has(pid) || o < start.get(pid)) continue;
+        let r = rec.get(pid);
+        if (!r) { r = { w: 0, l: 0 }; rec.set(pid, r); }
+        if (d.winner === pid) r.w++; else r.l++;
+        if (r.l - r.w >= margin && r.w <= maxWins) hit.set(pid, { ord: o, w: r.w, l: r.l });
+      }
+    }
+    return hit;
+  };
+  const out = new Map();
+  if (settings.freezeEnabled) {
+    const start = new Map();
+    for (const p of state.participants.values()) if (p.status !== 'excluida') start.set(p.pid, 0);
+    const again = new Map();
+    for (const [pid, hit] of scan(start)) {
+      const ov = overrides[pid];
+      const reset = Math.max(state.participants.get(pid).primaryMark ?? 0, ov?.mode === 'liberada' ? (ov.from ?? 0) : -1);
+      if (reset > hit.ord) again.set(pid, reset);
+      else out.set(pid, { ...hit, manual: false });
+    }
+    for (const [pid, hit] of scan(again)) out.set(pid, { ...hit, manual: false });
+  }
+  for (const [pid, ov] of Object.entries(overrides)) {
+    const p = state.participants.get(pid);
+    if (p && p.status !== 'excluida' && ov?.mode === 'congelada') out.set(pid, { manual: true });
+  }
+  porAval.set(evalId, out);
+  return out;
 }
 
 // Votos válidos da avaliação para o modelo.

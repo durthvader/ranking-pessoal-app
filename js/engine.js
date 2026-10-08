@@ -1,6 +1,6 @@
 // Liga o estado (eventos materializados) ao modelo e ao pareamento.
 
-import { activeParticipants, validVotes, evalSettings, eligibilityIssues } from './store.js';
+import { activeParticipants, validVotes, evalSettings, eligibilityIssues, isFrozenIssue } from './store.js';
 import { nextPair, pickAudit, usefulPairs, pairKey, groupOf, groupLabel, contenders, underestimated, DEFAULT_PAIRING } from './model/pairing.js';
 import { probAbove, normCdf } from './model/bt.js';
 import { auditSummary, sideBias } from './model/signals.js';
@@ -260,12 +260,13 @@ export class Engine {
       if (!part) continue;
       const ps = stats.get(pid);
       const ph = part.primary ? st.photos.get(part.primary) : null;
+      const issues = eligibilityIssues(st, part, settings, null);
       rows.push({
         pos: p + 1, i, pid, name: part.name, code: part.code, part, photo: ph,
         R: m.R[i], sdR: m.sdR[i], lo: m.rankLo[i], hi: m.rankHi[i], med: m.rankMed[i],
         p1: m.p1[i], pTop: m.pTop[i], comps: ps.comps, wins: ps.wins, losses: ps.losses,
         abstains: ps.abstains, deferred: ps.deferred, under: ps.comps < settings.coverageMin,
-        issues: eligibilityIssues(st, part, settings, null),
+        issues, frozen: issues.some(isFrozenIssue),
       });
     }
     for (let k = 0; k < rows.length; k++) {
@@ -449,9 +450,13 @@ export class Engine {
       top.wide = wide;
     }
     const phase = uncoveredEligible > 0 ? 'cobertura' : 'adaptativa';
+    // fora dos confrontos: congeladas pela regra das derrotas e pendências de foto, contadas à parte
+    let frozenN = 0;
+    for (const iss of ctx.reasons.values()) if (iss.some(isFrozenIssue)) frozenN++;
+    const photoBlockedN = ctx.reasons.size - frozenN;
     const out = {
       settings, valid, budget: settings.budget, kinds, activeN, eligibleN: elig, covered, uncoveredEligible, hist,
-      coverageMin: settings.coverageMin, top, phase, reasons: ctx.reasons,
+      coverageMin: settings.coverageMin, top, phase, reasons: ctx.reasons, frozenN, photoBlockedN,
       missingCoverage: counts.reduce((a, c) => a + Math.max(0, settings.coverageMin - c), 0),
     };
     this.cache.set(ck, out);

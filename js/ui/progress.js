@@ -69,7 +69,8 @@ export function renderProgress(app, root) {
       h('p', { class: 'help' }, prog.uncoveredEligible > 0
         ? `Fase de cobertura: faltam cerca de ${fmtInt(Math.ceil(prog.missingCoverage / 2))} confrontos para todas chegarem a ${prog.coverageMin} comparações.`
         : 'Cobertura completa. Os confrontos agora seguem a fase adaptativa.'),
-      prog.activeN - prog.eligibleN > 0 ? h('p', { class: 'help' }, `${prog.activeN - prog.eligibleN} participantes estão fora dos confrontos por pendência de foto. `, isOwner(app.access) ? h('a', { href: '#/participantes?aba=revisar' }, 'Revisar') : null) : null));
+      prog.photoBlockedN > 0 ? h('p', { class: 'help' }, `${prog.photoBlockedN} participantes estão fora dos confrontos por pendência de foto. `, isOwner(app.access) ? h('a', { href: '#/participantes?aba=revisar' }, 'Revisar') : null) : null,
+      prog.frozenN > 0 ? h('p', { class: 'help' }, `${prog.frozenN} participantes congeladas pela regra das derrotas: continuam no ranking e no cálculo, fora de novos confrontos. `, h('a', { href: '#/ranking?filtro=congeladas' }, 'Ver congeladas')) : null));
 
     // 3. disputa pelo 1º lugar
     if (m && prog.top) {

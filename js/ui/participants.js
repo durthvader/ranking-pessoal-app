@@ -1,6 +1,6 @@
 import { h, clear, fmtInt, fmtPct, fmtDate, normName } from '../util.js';
 import { photoImg, badge, openDrawer, closeDrawer, toast, modal, confirmDialog, choiceDialog } from './common.js';
-import { eligibilityIssues, evalSettings } from '../store.js';
+import { eligibilityIssues, evalSettings, frozenInfo } from '../store.js';
 import { Z_OF_LEVEL } from './ranking.js';
 import { restoreBackup, importSpreadsheet } from '../backup.js';
 import { imageSearchControls } from './image-search.js';
@@ -61,6 +61,25 @@ export function openParticipant(app, pid) {
         h('p', { class: 'muted' }, [p.code != null ? `Código ${p.code}` : null, p.meta?.pais, p.meta?.atuacao, p.meta?.epoca_sugerida ? `época sugerida: ${p.meta.epoca_sugerida}` : null].filter(Boolean).join(' · ')),
         issues.length ? h('div', { class: 'notice warn' }, 'Fora dos confrontos agora: ', issues.join('; '), '.') : null,
       );
+      // regra de congelamento: a decisão manual fica nas configurações desta avaliação
+      if (isOwner(app.access) && p.status !== 'excluida' && s.activeEval) {
+        const fz = frozenInfo(s).get(pid);
+        const ov = (settings.freezeOverrides || {})[pid];
+        const setOverride = async (value, msg) => {
+          const all = { ...(settings.freezeOverrides || {}) };
+          if (value) all[pid] = value; else delete all[pid];
+          try { await app.setEvalSettings({ freezeOverrides: all }); toast(msg); } catch (e) { toast(e.message, { type: 'err' }); }
+        };
+        const texto = fz ? 'Congelada: continua no ranking e no cálculo, sem novos confrontos.'
+          : ov?.mode === 'liberada' ? 'Descongelada manualmente: a regra conta só os votos feitos depois da liberação.'
+            : settings.freezeEnabled ? `Regra das derrotas: congela com ${settings.freezeMargin} derrotas a mais que vitórias e até ${settings.freezeMaxWins} vitórias.`
+              : 'Regra das derrotas desligada nesta avaliação.';
+        root.append(h('div', { class: 'row', style: { gap: '6px', margin: '6px 0', alignItems: 'center' } },
+          h('span', { class: 'help' }, texto),
+          fz ? h('button', { class: 'btn small', onclick: () => setOverride({ mode: 'liberada', from: s.decisionCount }, 'Participante descongelada. Ela volta aos confrontos e a contagem da regra recomeça agora.') }, 'Descongelar')
+            : h('button', { class: 'btn small', onclick: () => setOverride({ mode: 'congelada' }, 'Participante congelada. Ela continua no ranking e sai dos novos confrontos.') }, 'Congelar'),
+          ov ? h('button', { class: 'btn small', onclick: () => setOverride(null, 'A participante volta a seguir a regra automática.') }, 'Seguir a regra automática') : null));
+      }
       // foto principal
       const big = photoImg(app, ph, { cls: '', full: true, alt: p.name });
       big.style.cssText = 'width:100%;max-height:52vh;object-fit:contain;background:var(--photo-bg);border-radius:12px;display:block;cursor:zoom-in';

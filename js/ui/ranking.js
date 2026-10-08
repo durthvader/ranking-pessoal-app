@@ -2,6 +2,7 @@ import { h, clear, fmtInt, fmtPct, normName } from '../util.js';
 import { photoImg, badge } from './common.js';
 import { openParticipant } from './participants.js';
 import { isGuest } from '../access.js';
+import { isFrozenIssue } from '../store.js';
 
 export const Z_OF_LEVEL = { 0.8: 1.2816, 0.9: 1.6449, 0.95: 1.96 };
 
@@ -13,11 +14,11 @@ export function rowFlags(r, settings) {
   if (r.under) out.push(badge(`pouco avaliada (${r.comps})`, 'warn'));
   const defer = [...r.deferred.values()].reduce((a, b) => a + b, 0);
   if (defer) out.push(badge(`adiada ${defer}×`));
-  for (const iss of r.issues) out.push(badge(iss, 'err'));
+  for (const iss of r.issues) out.push(badge(iss, isFrozenIssue(iss) ? 'warn' : 'err'));
   return out;
 }
 
-export function renderRanking(app, root) {
+export function renderRanking(app, root, query = {}) {
   const header = h('div');
   const controls = h('div', { class: 'row', style: { margin: '8px 0 12px' } });
   const body = h('div');
@@ -29,7 +30,9 @@ export function renderRanking(app, root) {
     h('option', { value: 'duvida' }, 'Ordem incerta ou empate'),
     h('option', { value: 'pouco' }, 'Pouco avaliadas'),
     h('option', { value: 'candidatas' }, 'Candidatas ao 1º lugar'),
-    h('option', { value: 'pendencia' }, 'Com pendência de foto'));
+    h('option', { value: 'pendencia' }, 'Com pendência de foto'),
+    h('option', { value: 'congeladas' }, 'Congeladas (fora dos confrontos)'));
+  if (query.filtro && [...filter.options].some((o) => o.value === query.filtro)) filter.value = query.filtro;
   controls.append(q, filter);
   q.addEventListener('input', () => draw());
   filter.addEventListener('change', () => draw());
@@ -63,7 +66,8 @@ export function renderRanking(app, root) {
     if (f === 'duvida') rows = rows.filter((r) => r.closeNext || r.closePrev || r.tieNext || r.tiePrev);
     if (f === 'pouco') rows = rows.filter((r) => r.under);
     if (f === 'candidatas') rows = rows.filter((r) => r.p1 >= 0.01 || r.lo === 1);
-    if (f === 'pendencia') rows = rows.filter((r) => r.issues.length);
+    if (f === 'pendencia') rows = rows.filter((r) => r.issues.some((i) => !isFrozenIssue(i)));
+    if (f === 'congeladas') rows = rows.filter((r) => r.frozen);
     if (!rows.length) { body.append(h('div', { class: 'empty' }, 'Nenhuma participante neste filtro.')); return; }
     const wide = window.innerWidth > 900;
     if (wide) {
