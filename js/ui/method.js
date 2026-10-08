@@ -11,7 +11,7 @@ export function renderMethod(app, root) {
     return;
   }
   const s = app.state ? evalSettings(app.state) : null;
-  const margem = s?.freezeMargin ?? 5, maxV = s?.freezeMaxWins ?? 4; // regra de congelamento
+  const margem = s?.freezeMargin ?? 4, maxV = s?.freezeMaxWins ?? 4; // regra de congelamento
   const m = app.engine?.model;
   const P = (...t) => h('p', null, ...t);
   const F = (t) => h('div', { class: 'formula' }, t);

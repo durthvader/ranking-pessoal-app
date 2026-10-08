@@ -302,7 +302,7 @@ export function frozenInfo(state, evalId = state.activeEval) {
   if (porAval.has(evalId)) return porAval.get(evalId);
   const settings = evalSettings(state, evalId);
   const overrides = (settings.freezeOverrides || {})[evalId] || {};
-  const margin = settings.freezeMargin ?? 5;
+  const margin = settings.freezeMargin ?? 4;
   const maxWins = settings.freezeMaxWins ?? 4;
   const votes = validVotes(state, evalId).slice().sort((a, b) => (a.ord ?? 0) - (b.ord ?? 0));
   // primeira vez em que cada participante atinge a regra, contando a partir de start.get(pid)

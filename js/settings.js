@@ -11,7 +11,7 @@ export const DEFAULT_EVAL_SETTINGS = {
   countAudits: false, // votos de auditoria entram no cálculo?
   includePendingPhotos: false, // fotos ainda não confirmadas entram nos confrontos?
   freezeEnabled: true, // congela quem acumula derrotas: sai dos novos confrontos e continua no cálculo
-  freezeMargin: 5, // derrotas a mais que vitórias para congelar (6 até 08/10/2026)
+  freezeMargin: 4, // derrotas a mais que vitórias para congelar (6 e depois 5 até 08/10/2026)
   freezeMaxWins: 4, // a regra só vale para quem tem até esta quantidade de vitórias
   // decisões manuais por avaliação: { evalId: { pid: { mode: 'congelada' | 'liberada', from } } }. A chave da avaliação
   // impede que valham em outra avaliação, já que a aprovação de um convidado copia estas configurações.
@@ -51,7 +51,7 @@ export const SETTINGS_HELP = {
   countAudits: 'Votos de auditoria repetem pares já vistos. Por padrão servem só para medir consistência.',
   includePendingPhotos: 'Fotos trocadas automaticamente na importação ficam fora dos confrontos até você confirmar.',
   freezeEnabled: 'Quem chega à diferença de derrotas abaixo (com até o limite de vitórias) sai dos novos confrontos e continua no ranking e no cálculo. Uma vez congelada, fica assim até a foto principal mudar ou até você descongelar na ficha da participante.',
-  freezeMargin: 'Derrotas a mais que vitórias. Com 5, congelam os placares 0-5, 1-6, 2-7, 3-8 e 4-9, e também os piores, como 0-7.',
+  freezeMargin: 'Derrotas a mais que vitórias. Com 4, congelam os placares 0-4, 1-5, 2-6, 3-7 e 4-8, e também os piores, como 0-6.',
   freezeMaxWins: 'A regra só vale para quem tem até esta quantidade de vitórias.',
   wTop: 'Prioridade para pares que podem mudar o 1º lugar.',
   reviewAuto: 'Perto do fim do orçamento, os pares passam a vir das candidatas ao 1º lugar e das pouco avaliadas que ainda podem alcançar a líder.',
