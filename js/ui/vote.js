@@ -434,7 +434,7 @@ export function renderVote(app, root) {
     const p = st.cur;
     if (p && !p.locked) {
       const A = app.state.participants.get(p.left), B = app.state.participants.get(p.right);
-      if (!A || !B || A.status === 'excluida' || B.status === 'excluida' || A.primary !== p.pl || B.primary !== p.pr) nextPresentation();
+      if (!A || !B || ['excluida', 'congelada'].includes(A.status) || ['excluida', 'congelada'].includes(B.status) || A.primary !== p.pl || B.primary !== p.pr) nextPresentation();
     } else if (!p) maybeStart();
   });
 

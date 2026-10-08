@@ -281,7 +281,7 @@ export function eligibilityIssues(state, p, settings, available) {
   }
   if (p.primaryConflict) issues.push('troca de foto em conflito');
   const fz = p.status === 'excluida' ? null : frozenInfo(state).get(p.pid);
-  if (fz) issues.push(fz.manual ? 'congelada manualmente' : `congelada (chegou a ${fz.w}-${fz.l})`);
+  if (fz) issues.push(fz.catalog ? 'congelada pelo administrador para todos' : fz.manual ? 'congelada manualmente' : `congelada (chegou a ${fz.w}-${fz.l})`);
   return issues;
 }
 
@@ -302,7 +302,7 @@ export function frozenInfo(state, evalId = state.activeEval) {
   if (porAval.has(evalId)) return porAval.get(evalId);
   const settings = evalSettings(state, evalId);
   const overrides = (settings.freezeOverrides || {})[evalId] || {};
-  const margin = settings.freezeMargin ?? 6;
+  const margin = settings.freezeMargin ?? 5;
   const maxWins = settings.freezeMaxWins ?? 4;
   const votes = validVotes(state, evalId).slice().sort((a, b) => (a.ord ?? 0) - (b.ord ?? 0));
   // primeira vez em que cada participante atinge a regra, contando a partir de start.get(pid)
@@ -337,8 +337,19 @@ export function frozenInfo(state, evalId = state.activeEval) {
     const p = state.participants.get(pid);
     if (p && p.status !== 'excluida' && ov?.mode === 'congelada') out.set(pid, { manual: true });
   }
+  // O status pertence ao catálogo compartilhado. Vale antes do primeiro voto de cada convidado
+  // e permanece até o administrador liberar a participante, inclusive após trocar a foto.
+  for (const p of state.participants.values()) {
+    if (p.status === 'congelada') out.set(p.pid, { manual: true, catalog: true });
+  }
   porAval.set(evalId, out);
   return out;
+}
+
+export function globalFreezeCandidates(state) {
+  if (!state.activeEval || !state.prefs.shareFrozen) return [];
+  const frozen = frozenInfo(state);
+  return activeParticipants(state).filter(p => p.status !== 'congelada' && frozen.has(p.pid));
 }
 
 // Votos válidos da avaliação para o modelo.

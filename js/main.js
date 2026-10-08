@@ -3,7 +3,7 @@ import { Remote } from './remote.js';
 import { Sync } from './sync.js';
 import { Images, normalizeImage } from './images.js';
 import { Engine } from './engine.js';
-import { materialize } from './store.js';
+import { materialize, globalFreezeCandidates, evalSettings } from './store.js';
 import { uuid, uuidv5, NS_URL, nowIso, h, clear, sha256Hex } from './util.js';
 import { toast, icon, syncText, loadScript, closeDrawer, modal, applyTheme } from './ui/common.js';
 import { DEFAULT_EVAL_SETTINGS } from './settings.js';
@@ -184,6 +184,7 @@ export class App {
     this.route();
     this.sync.start();
     this.engine.refresh();
+    this.shareFrozenParticipants().catch(e => toast(e.message, { type: 'err' }));
     setTimeout(() => this.autoDownloadImages(), 4000);
     this.refreshAccessRequests();
     this.accessTimer = setInterval(() => this.refreshAccessRequests(), 30000);
@@ -199,6 +200,38 @@ export class App {
     this.engine.cache.clear();
     this.emit('state');
     this.engine.refresh();
+    this.shareFrozenParticipants().catch(e => toast(e.message, { type: 'err' }));
+  }
+
+  async shareFrozenParticipants() {
+    if (!isOwner(this.access) || this.sharingFrozen) return;
+    this.sharingFrozen = true;
+    try {
+      for (;;) {
+        const participants = globalFreezeCandidates(this.state);
+        if (!participants.length) break;
+        const events = participants.map(p => this.newEvent('participant_edit', {
+          pid: p.pid, field: 'status', value: 'congelada', prev: this.state.headIds(`pe:${p.pid}:status`),
+        }));
+        await this.addEvents(events);
+      }
+    } finally { this.sharingFrozen = false; }
+  }
+
+  async unfreezeForEveryone(pid) {
+    const events = [this.newEvent('participant_edit', {
+      pid, field: 'status', value: 'ativa', prev: this.state.headIds(`pe:${pid}:status`),
+    })];
+    if (this.activeEval) {
+      const current = evalSettings(this.state);
+      const freezeOverrides = { ...current.freezeOverrides, [this.activeEval]: {
+        ...current.freezeOverrides?.[this.activeEval], [pid]: { mode: 'liberada', from: this.state.decisionCount },
+      } };
+      events.push(this.newEvent('eval_settings', {
+        values: { ...current, freezeOverrides }, prev: this.state.headIds(`es:${this.activeEval}`),
+      }, { evalId: this.activeEval }));
+    }
+    await this.addEvents(events);
   }
 
   touchSession(activity = true) {

@@ -40,6 +40,7 @@ export function openParticipant(app, pid) {
       image.style.cssText = 'width:100%;max-height:70dvh;object-fit:contain;display:block';
       const row = app.engine.rankingRows().find(r => r.pid === pid);
       root.append(h('h1', null, p.name), image,
+        p.status === 'congelada' ? h('p', { class: 'muted' }, 'O administrador congelou esta participante para todos. Ela continua no ranking e não entra em novos confrontos.') : null,
         row ? h('p', { class: 'muted' }, `${row.pos}º na sua avaliação · ${fmtInt(row.comps)} comparações`) : null);
     });
   }
@@ -71,15 +72,17 @@ export function openParticipant(app, pid) {
           if (value) desta[pid] = value; else delete desta[pid];
           try { await app.setEvalSettings({ freezeOverrides: { ...todas, [s.activeEval]: desta } }); toast(msg); } catch (e) { toast(e.message, { type: 'err' }); }
         };
-        const texto = fz ? 'Congelada: continua no ranking e no cálculo, sem novos confrontos.'
+        const texto = fz?.catalog ? 'Congelada para todos: continua no ranking e no cálculo, sem novos confrontos em nenhuma conta.' : fz ? 'Congelada: continua no ranking e no cálculo, sem novos confrontos.'
           : ov?.mode === 'liberada' ? 'Descongelada manualmente: a regra conta só os votos feitos depois da liberação.'
             : settings.freezeEnabled ? `Regra das derrotas: congela com ${settings.freezeMargin} derrotas a mais que vitórias e até ${settings.freezeMaxWins} vitórias.`
               : 'Regra das derrotas desligada nesta avaliação.';
         root.append(h('div', { class: 'row', style: { gap: '6px', margin: '6px 0', alignItems: 'center' } },
           h('span', { class: 'help' }, texto),
-          fz ? h('button', { class: 'btn small', onclick: () => setOverride({ mode: 'liberada', from: s.decisionCount }, 'Participante descongelada. Ela volta aos confrontos e a contagem da regra recomeça agora.') }, 'Descongelar')
+          fz?.catalog ? h('button', { class: 'btn small', onclick: async () => { try { await app.unfreezeForEveryone(pid); toast('Participante liberada no catálogo de todas as contas.'); } catch (e) { toast(e.message, { type: 'err' }); } } }, 'Descongelar para todos')
+            : fz ? h('button', { class: 'btn small', onclick: () => setOverride({ mode: 'liberada', from: s.decisionCount }, 'Participante descongelada. Ela volta aos confrontos e a contagem da regra recomeça agora.') }, 'Descongelar')
             : h('button', { class: 'btn small', onclick: () => setOverride({ mode: 'congelada' }, 'Participante congelada. Ela continua no ranking e sai dos novos confrontos.') }, 'Congelar'),
-          ov ? h('button', { class: 'btn small', onclick: () => setOverride(null, 'A participante volta a seguir a regra automática.') }, 'Seguir a regra automática') : null));
+          !fz?.catalog ? h('button', { class: 'btn small', onclick: async () => { try { await app.editParticipant(pid, 'status', 'congelada'); toast('Participante congelada para todos. Os votos anteriores continuam no cálculo.'); } catch (e) { toast(e.message, { type: 'err' }); } } }, 'Congelar para todos') : null,
+          ov && !fz?.catalog ? h('button', { class: 'btn small', onclick: () => setOverride(null, 'A participante volta a seguir a regra automática.') }, 'Seguir a regra automática') : null));
       }
       // foto principal
       const big = photoImg(app, ph, { cls: '', full: true, alt: p.name });
@@ -280,7 +283,7 @@ export function renderParticipants(app, root, query = {}) {
         list.append(h('div', { class: 'rank-item', onclick: () => openParticipant(app, p.pid) },
           h('div', { class: 'pos muted', style: { fontSize: '13px', fontWeight: 400 } }, p.code ?? ''),
           photoImg(app, ph, { cls: 'thumb' }),
-          h('div', { style: { minWidth: 0 } }, h('div', { class: 'name' }, p.name), h('div', { class: 'meta' }, p.status === 'excluida' ? badge('excluída', 'err') : null, photoFlags(ph))),
+          h('div', { style: { minWidth: 0 } }, h('div', { class: 'name' }, p.name), h('div', { class: 'meta' }, p.status === 'excluida' ? badge('excluída', 'err') : p.status === 'congelada' ? badge('congelada para todos', 'warn') : null, photoFlags(ph))),
           h('div')));
       }
       if (!n) list.append(h('div', { class: 'empty' }, s.participants.size ? 'Nenhuma participante encontrada.' : 'Nenhuma participante ainda. Use a aba Importar.'));

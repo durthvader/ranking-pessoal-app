@@ -31,6 +31,7 @@ export function renderSettings(app, root) {
       chk('showNames', 'Mostrar nomes durante o voto', 'Desligado por padrão, para a escolha depender só da foto.'),
       chk('showScores', 'Mostrar números no motivo do par', 'Desligado por padrão. Pontuações nunca aparecem sobre as fotos.'),
       chk('showReason', 'Mostrar o motivo de cada par abaixo das fotos'),
+      chk('shareFrozen', 'Aplicar minhas congeladas a todos', 'Quem congelar na sua avaliação sai dos novos confrontos de todas as contas. Os votos continuam no cálculo. Para liberar, use “Descongelar para todos” na ficha da participante.'),
       h('label', { class: 'field', style: { maxWidth: '420px' } }, h('span', null, 'Disposição das fotos'), layout),
       h('p', { class: 'help' }, 'Estas preferências valem em todos os seus aparelhos.'));
   }
