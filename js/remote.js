@@ -4,6 +4,14 @@ import { assertWritableEvents, isGuest } from './access.js';
 export const TABLE = 'eventos';
 export const BUCKET = 'fotos';
 
+export class SessionExpiredError extends Error {
+  constructor(original = null) {
+    super('Sessão expirada. Entre novamente.');
+    this.name = 'SessionExpiredError';
+    this.original = original;
+  }
+}
+
 export class Remote {
   constructor({ url, anonKey }) {
     if (!globalThis.supabase?.createClient) throw new Error('Biblioteca do Supabase não carregada.');
@@ -18,8 +26,16 @@ export class Remote {
 
   async session() {
     const { data, error } = await this.client.auth.getSession();
-    if (error) throw error;
+    if (error) throw traduzErro(error);
     this.user = data.session?.user || null;
+    return data.session;
+  }
+
+  async refreshSession() {
+    const { data, error } = await this.client.auth.refreshSession();
+    if (error) throw traduzErro(error);
+    if (!data.session) throw new SessionExpiredError();
+    this.user = data.session.user;
     return data.session;
   }
 
@@ -150,7 +166,14 @@ export class Remote {
   }
 
   async getAccess() {
-    const { data, error } = await this.client.from('ranking_accounts').select('*').eq('user_id', this.uid).maybeSingle();
+    const read = () => this.client.from('ranking_accounts').select('*').eq('user_id', this.uid).maybeSingle();
+    let { data, error } = await read();
+    // O servidor pode recusar um token que o relógio do aparelho ainda considera válido.
+    // Renova uma vez e refaz a consulta com o token recebido do servidor.
+    if (/JWT expired/i.test(error?.message || '')) {
+      await this.refreshSession();
+      ({ data, error } = await read());
+    }
     if (error) throw traduzErro(error);
     if (!data) throw new Error('Seu perfil de acesso ainda não está disponível.');
     this.access = data;
@@ -215,6 +238,11 @@ export class Remote {
 
 function traduzErro(error) {
   const m = String(error?.message || error);
+  if (['refresh_token_not_found', 'refresh_token_already_used', 'session_not_found', 'session_expired'].includes(error?.code)
+      || error?.name === 'AuthSessionMissingError'
+      || /JWT expired|Invalid Refresh Token|Refresh Token Not Found|Auth session missing/i.test(m)) {
+    return new SessionExpiredError(m);
+  }
   const map = [
     [/Invalid login credentials/i, 'E-mail ou senha incorretos.'],
     [/Email not confirmed/i, 'Confirme o e-mail antes de entrar (veja a mensagem enviada pelo Supabase).'],
@@ -224,7 +252,6 @@ function traduzErro(error) {
     [/relation .* does not exist|Could not find the table/i, 'A tabela "eventos" não existe. Rode o arquivo supabase/schema.sql no SQL Editor.'],
     [/Bucket not found/i, 'O bucket "fotos" não existe. Rode o arquivo supabase/schema.sql no SQL Editor.'],
     [/Failed to fetch|NetworkError|Load failed/i, 'Sem conexão com o servidor.'],
-    [/JWT expired/i, 'Sessão expirada. Entre novamente.'],
     [/row-level security/i, 'Acesso negado pelas regras de segurança do banco.'],
   ];
   for (const [re, msg] of map) if (re.test(m)) return Object.assign(new Error(msg), { original: m });

@@ -1,5 +1,5 @@
 import { LocalDB } from './db.js';
-import { Remote } from './remote.js';
+import { Remote, SessionExpiredError } from './remote.js';
 import { Sync } from './sync.js';
 import { Images, normalizeImage } from './images.js';
 import { Engine } from './engine.js';
@@ -20,7 +20,7 @@ import { canUseRoute, assertWritableEvents, isOwner } from './access.js';
 import { renderGuests } from './ui/guests.js';
 import { renderCorrelation } from './ui/correlation.js';
 
-export const APP_VERSION = '1.2.1';
+export const APP_VERSION = '1.2.2';
 const SESSION_GAP_MS = 30 * 60 * 1000;
 
 const ROUTES = {
@@ -108,23 +108,30 @@ export class App {
         await loadScript('vendor/supabase.js');
         this.remote = new Remote(this.config);
         this.remote.onAuthChange((event) => {
-          if (event === 'SIGNED_OUT' && !this.signingOutOffline) location.reload();
+          // Durante a abertura, boot() escolhe a tela de login ou os dados offline.
+          if (event === 'SIGNED_OUT' && this.state && navigator.onLine && !this.signingOutOffline) location.reload();
           if (event === 'PASSWORD_RECOVERY') this.passwordRecovery();
         });
       } catch (e) {
         if (!localStorage.getItem('rp-last-uid')) return this.showWelcome(e.message);
       }
       let session = null;
-      try { session = this.remote ? await this.remote.session() : null; } catch { session = null; }
+      let sessionError = null;
+      try { session = this.remote ? await this.remote.session() : null; }
+      catch (e) { sessionError = e; }
       if (!session) {
         const last = localStorage.getItem('rp-last-uid');
         // sem conexão (ou sessão vencida sem rede): abre os dados guardados neste aparelho;
         // a sincronização volta quando houver conexão e sessão válida
         if (last && (!navigator.onLine || !this.remote)) this.offlineUid = last;
-        else return this.showLogin();
+        else return this.showLogin(sessionError?.message);
       }
     }
-    await this.openData();
+    try { await this.openData(); }
+    catch (e) {
+      if (e instanceof SessionExpiredError) return this.showLogin(e.message);
+      throw e;
+    }
   }
 
   registerSW() {
