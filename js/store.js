@@ -291,8 +291,9 @@ export const isFrozenIssue = (issue) => issue.startsWith('congelada');
 // `freezeMargin` derrotas a mais que vitórias com até `freezeMaxWins` vitórias. A congelada continua no
 // cálculo e no ranking; só deixa de entrar em novos confrontos. A regra vale até a foto principal mudar
 // depois do congelamento ou até a liberação manual: a contagem então recomeça a partir dali.
-// Decisões manuais ficam em settings.freezeOverrides: { pid: { mode: 'congelada' | 'liberada', from } },
-// em que `from` é o número de decisões registradas no momento da liberação.
+// Decisões manuais ficam em settings.freezeOverrides[evalId]: { pid: { mode: 'congelada' | 'liberada', from } },
+// em que `from` é o número de decisões registradas no momento da liberação. A chave da avaliação faz com que
+// decisões copiadas junto com as configurações (aprovação de convidado) não valham na avaliação de destino.
 const frozenCache = new WeakMap();
 
 export function frozenInfo(state, evalId = state.activeEval) {
@@ -300,7 +301,7 @@ export function frozenInfo(state, evalId = state.activeEval) {
   if (!porAval) { porAval = new Map(); frozenCache.set(state, porAval); }
   if (porAval.has(evalId)) return porAval.get(evalId);
   const settings = evalSettings(state, evalId);
-  const overrides = settings.freezeOverrides || {};
+  const overrides = (settings.freezeOverrides || {})[evalId] || {};
   const margin = settings.freezeMargin ?? 6;
   const maxWins = settings.freezeMaxWins ?? 4;
   const votes = validVotes(state, evalId).slice().sort((a, b) => (a.ord ?? 0) - (b.ord ?? 0));

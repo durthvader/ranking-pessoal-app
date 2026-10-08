@@ -64,11 +64,12 @@ export function openParticipant(app, pid) {
       // regra de congelamento: a decisão manual fica nas configurações desta avaliação
       if (isOwner(app.access) && p.status !== 'excluida' && s.activeEval) {
         const fz = frozenInfo(s).get(pid);
-        const ov = (settings.freezeOverrides || {})[pid];
+        const todas = settings.freezeOverrides || {};
+        const desta = { ...(todas[s.activeEval] || {}) };
+        const ov = desta[pid];
         const setOverride = async (value, msg) => {
-          const all = { ...(settings.freezeOverrides || {}) };
-          if (value) all[pid] = value; else delete all[pid];
-          try { await app.setEvalSettings({ freezeOverrides: all }); toast(msg); } catch (e) { toast(e.message, { type: 'err' }); }
+          if (value) desta[pid] = value; else delete desta[pid];
+          try { await app.setEvalSettings({ freezeOverrides: { ...todas, [s.activeEval]: desta } }); toast(msg); } catch (e) { toast(e.message, { type: 'err' }); }
         };
         const texto = fz ? 'Congelada: continua no ranking e no cálculo, sem novos confrontos.'
           : ov?.mode === 'liberada' ? 'Descongelada manualmente: a regra conta só os votos feitos depois da liberação.'

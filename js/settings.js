@@ -13,7 +13,9 @@ export const DEFAULT_EVAL_SETTINGS = {
   freezeEnabled: true, // congela quem acumula derrotas: sai dos novos confrontos e continua no cálculo
   freezeMargin: 6, // derrotas a mais que vitórias para congelar
   freezeMaxWins: 4, // a regra só vale para quem tem até esta quantidade de vitórias
-  freezeOverrides: {}, // decisões manuais por participante: { pid: { mode: 'congelada' | 'liberada', from } }
+  // decisões manuais por avaliação: { evalId: { pid: { mode: 'congelada' | 'liberada', from } } }. A chave da avaliação
+  // impede que valham em outra avaliação, já que a aprovação de um convidado copia estas configurações.
+  freezeOverrides: {},
   wTop: 6, // peso da disputa pelo 1º lugar (escolhido nas simulações)
   wUnder: 1.5, // peso de participantes pouco avaliadas
   wCross: 0.3, // peso de confrontos entre faixas
