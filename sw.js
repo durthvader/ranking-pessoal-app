@@ -1,7 +1,7 @@
 // Service worker: guarda os arquivos do app para uso sem conexão.
 // Arquivos do próprio app: rede primeiro (versão mais nova), cache como reserva.
 // Chamadas ao Supabase (outra origem) passam direto; os dados ficam no IndexedDB.
-const CACHE = 'rp-shell-v1.3.1-convidados';
+const CACHE = 'rp-shell-v1.3.3-historico-etapas';
 const SHELL = [
   './', 'index.html', 'config.js', 'manifest.webmanifest', 'sw.js', 'css/app.css', 'planilha_modelo.xlsx',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',

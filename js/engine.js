@@ -501,10 +501,14 @@ export class Engine {
 
   async stages() {
     const inp = this.input();
-    const key = 'stages:' + hashInts(inp.votes) + ':' + JSON.stringify([inp.settings.coverageMin, inp.settings.stageSize, inp.settings.groups, inp.settings.sigma]);
+    const key = 'stages:' + JSON.stringify([inp.evalId, inp.pids, hashInts(inp.votes),
+      inp.decs.map(d => [d.phase, d.reason?.kind, d.reason?.round]),
+      inp.settings.coverageMin, inp.settings.stageSize, inp.settings.groups, inp.settings.sigma]);
     if (this.cache.has(key)) return this.cache.get(key);
     const votes = [];
-    for (let k = 0; k < inp.votes.length; k += 2) votes.push({ w: inp.votes[k], l: inp.votes[k + 1] });
+    for (let k = 0; k < inp.votes.length; k += 2) votes.push({
+      w: inp.votes[k], l: inp.votes[k + 1], phase: inp.decs[k / 2].phase, reason: inp.decs[k / 2].reason,
+    });
     const res = await this.call({
       type: 'stages', n: inp.pids.length, votes,
       options: { sigma: inp.settings.sigma, coverageMin: inp.settings.coverageMin, stageSize: inp.settings.stageSize, groups: inp.settings.groups },

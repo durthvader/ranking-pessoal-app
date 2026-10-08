@@ -13,8 +13,9 @@ function s(tag, attrs = {}, ...kids) {
 
 export function renderBracket(app, root, query = {}) {
   const intro = h('p', { class: 'help' },
-    'Rodadas 1 a 6: fase de cobertura (cada participante faz uma comparação por rodada, como no sistema suíço). Etapas: blocos de escolhas da fase adaptativa. '
-    + 'Ao fim de cada rodada ou etapa, o app reestima as pontuações só com os votos até ali e refaz as faixas. Todas continuam elegíveis: derrotas entram no histórico e não eliminam ninguém. '
+    'Rodadas: confrontos da fase de cobertura, conforme a rodada registrada ao votar. Etapas: blocos de escolhas da fase adaptativa. '
+    + 'Ao fim de cada rodada ou etapa, o app reestima as pontuações só com os votos até ali e refaz as faixas. O ranking mantém as participantes congeladas e seus votos. '
+    + 'Uma cobertura retomada aparece depois das etapas já realizadas. Todas as participantes atuais aparecem desde o início; as novas começam com zero votos nas fases anteriores. '
     + 'Faixas em azul mostram quem permaneceu; faixas em laranja mostram quem mudou de faixa.');
   const pick = h('input', { type: 'search', placeholder: 'Ver o caminho de… (nome)', list: 'rp-names', style: { maxWidth: '320px' } });
   const datalist = h('datalist', { id: 'rp-names' });
@@ -25,6 +26,7 @@ export function renderBracket(app, root, query = {}) {
   let data = null;
   let selected = query.p || null;
   let alive = true;
+  let loadId = 0;
 
   for (const p of app.state.participants.values()) if (p.status !== 'excluida') datalist.append(h('option', { value: p.name }));
   if (selected) pick.value = app.state.participants.get(selected)?.name || '';
@@ -36,12 +38,14 @@ export function renderBracket(app, root, query = {}) {
   });
 
   async function load() {
+    const request = ++loadId;
     try {
       const d = await app.engine.stages();
-      if (!alive) return;
+      if (!alive || request !== loadId) return;
       data = d;
       draw();
     } catch (e) {
+      if (!alive || request !== loadId) return;
       clear(chart);
       chart.append(h('div', { class: 'notice err' }, 'Erro ao calcular etapas: ' + e.message));
     }
@@ -93,7 +97,7 @@ export function renderBracket(app, root, query = {}) {
     // blocos e cabeçalhos
     const selIdx = selected != null ? index.get(selected) : null;
     stages.forEach((st, k) => {
-      svg.append(s('text', { x: xOf(k) - 4, y: 14, class: 'muted' }, st.kind === 'cobertura' ? `R${st.number}` : `E${st.number}`));
+      svg.append(s('text', { x: xOf(k) - 4, y: 14, class: 'muted' }, `${st.kind === 'cobertura' ? 'R' : 'E'}${st.number}${st.occurrence > 1 ? ` (${st.occurrence})` : ''}`, s('title', null, st.label)));
       svg.append(s('text', { x: xOf(k) - 4, y: 27, class: 'muted' }, `${st.votes.length} conf.`));
       for (let g = 0; g < G; g++) {
         if (!sizes[g]) continue;
