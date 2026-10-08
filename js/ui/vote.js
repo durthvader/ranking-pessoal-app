@@ -22,10 +22,11 @@ export function renderVote(app, root) {
   const wrap = h('div', { class: 'vote' });
   root.append(wrap);
   const st = { cur: null, mode: localStorage.getItem('rp-vote-mode') || 'normal', audit: { left: 0, since: 0 }, busy: false, shownBudget: false };
+  const showNames = () => isGuest(app.access) || !!app.state.prefs.showNames;
   const viewer = createPhotoViewer({
     getPair: () => st.cur,
     getName: (side) => app.state.participants.get(side === 'L' ? st.cur?.left : st.cur?.right)?.name || '',
-    showNames: () => !!app.state.prefs.showNames,
+    showNames,
     canManage: () => !isGuest(app.access),
     getUrl: (side, p) => {
       const ph = app.state.photos.get(side === 'L' ? p.pl : p.pr);
@@ -50,7 +51,7 @@ export function renderVote(app, root) {
     const label = h('div', { class: 'label', hidden: true });
     const sideTag = h('div', { class: 'side' });
     const choice = h('button', { class: 'frame-choice', type: 'button', 'aria-label': side === 'L' ? 'Escolher a foto da esquerda' : 'Escolher a foto da direita', onclick: () => choose(side) });
-    const search = !isGuest(app.access) ? imageSearchShortcut(() => app.state.participants.get(side === 'L' ? st.cur?.left : st.cur?.right)?.name || '') : null;
+    const search = imageSearchShortcut(() => app.state.participants.get(side === 'L' ? st.cur?.left : st.cur?.right)?.name || '');
     const el = h('div', { class: 'frame' }, loading, img, label, sideTag, choice, search?.el);
     return { el, img, loading, label, sideTag, choice, search };
   }
@@ -152,8 +153,8 @@ export function renderVote(app, root) {
       const pid = side === 'L' ? p.left : p.right;
       const part = app.state.participants.get(pid);
       f.label.textContent = part?.name || '';
-      f.label.hidden = !app.state.prefs.showNames;
-      f.choice.setAttribute('aria-label', `Escolher ${app.state.prefs.showNames && part?.name || (side === 'L' ? 'a primeira foto' : 'a segunda foto')}`);
+      f.label.hidden = !showNames();
+      f.choice.setAttribute('aria-label', `Escolher ${showNames() && part?.name || (side === 'L' ? 'a primeira foto' : 'a segunda foto')}`);
       f.search?.update();
     }
     viewer.update();
@@ -257,7 +258,7 @@ export function renderVote(app, root) {
       ...app.newEvent(type, {
         a: p.left, b: p.right, pa: p.pl, pb: p.pr, phase: p.phase, reason: p.reason, layout: p.layout,
         shown: p.shownAt || null, ms: p.shownMs ? Math.round(performance.now() - p.shownMs) : null,
-        names: !!app.state.prefs.showNames, ...data,
+        names: showNames(), ...data,
       }, { evalId }),
       id: p.id, // a apresentação tem id próprio: toque repetido no mesmo par não cria outro voto
     };
@@ -303,8 +304,8 @@ export function renderVote(app, root) {
     const p = st.cur;
     if (!p || p.locked || st.busy) return;
     const target = await choiceDialog('Problema na foto', 'Qual foto tem problema?', [
-      { label: `Foto 1${app.state.prefs.showNames ? ' · ' + app.state.participants.get(p.left)?.name : ''}`, value: 'L' },
-      { label: `Foto 2${app.state.prefs.showNames ? ' · ' + app.state.participants.get(p.right)?.name : ''}`, value: 'R' },
+      { label: `Foto 1${showNames() ? ' · ' + app.state.participants.get(p.left)?.name : ''}`, value: 'L' },
+      { label: `Foto 2${showNames() ? ' · ' + app.state.participants.get(p.right)?.name : ''}`, value: 'R' },
       { label: 'As duas', value: 'LR' },
     ]);
     if (!target) return;
@@ -344,7 +345,7 @@ export function renderVote(app, root) {
     const rs = st.mode === 'revisao' ? null : app.engine.reviewSet();
     const v = await choiceDialog('Mais opções', null, [
       ...(!isGuest(app.access) ? [{ label: 'Problema na foto', value: 'problema' }] : []),
-      ...(!isGuest(app.access) ? [{ label: 'Termo da busca no Google Imagens', value: 'busca' }] : []),
+      { label: 'Termo da busca no Google Imagens', value: 'busca' },
       { label: 'Desfazer última escolha', value: 'desfazer' },
       { label: localStorage.getItem('rp-photo-fit') === 'inteira' ? 'Usar recorte 3×4 nos cartões' : 'Mostrar fotos inteiras nos cartões', value: 'enquadramento' },
       st.mode === 'revisao'

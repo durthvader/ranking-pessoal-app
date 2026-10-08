@@ -52,10 +52,8 @@ export function createPhotoViewer({ getPair, getName, getUrl, isReady, onChoose,
     const loading = h('span', { class: 'viewer-loading' }, 'Carregando…');
     const el = h('div', { class: 'viewer-photo', tabindex: '0' }, img, loading);
     const panel = { el, img, loading, loaded: false, failed: false };
-    if (canManage()) {
-      panel.search = imageSearchShortcut(() => getPair() ? getName(side) : '');
-      el.append(panel.search.el);
-    }
+    panel.search = imageSearchShortcut(() => getPair() ? getName(side) : '');
+    el.append(panel.search.el);
     let scale = 1, tx = 0, ty = 0, start = null, lastDist = 0, lastTap = null, multi = false;
     const pointers = new Map();
     const apply = () => { img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`; };
@@ -226,8 +224,8 @@ export function createPhotoViewer({ getPair, getName, getUrl, isReady, onChoose,
         button('Rever depois', () => { options.open = false; onAction('later'); }),
         canManage() ? button('Problema na foto', () => { options.open = false; onAction('problem'); }) : null,
         button('Desfazer', () => { options.open = false; onAction('undo'); }),
-        canManage() ? h('p', null, 'Termo da busca no Google Imagens:') : null, canManage() ? search.el : null,
-        canManage() ? h('small', null, 'Toque em G ↗ sobre a foto para buscar alternativas em outra aba.') : null));
+        h('p', null, 'Termo da busca no Google Imagens:'), search.el,
+        h('small', null, 'Toque em G ↗ sobre a foto para buscar alternativas em outra aba.')));
     otherButton = button('Outra foto', () => show(cur === 'L' ? 'R' : 'L'), 'viewer-other');
     otherButton.prepend(icon('dir'));
     chooseButton = button('Escolher esta', () => { if (!chooseButton.disabled) onChoose(cur); }, 'primary viewer-choose');
