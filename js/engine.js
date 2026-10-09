@@ -35,6 +35,8 @@ export const REASON_TEXT = {
   disputa_1: () => 'Pode mudar a disputa pelo 1º lugar',
   pouco_avaliada: () => 'Participante com poucas comparações',
   entre_faixas: () => 'Confere a divisão entre faixas vizinhas',
+  faixa_prioritaria: (r) => `Refina a ordem entre as posições ${r.from} e ${r.to}`,
+  ampliar_ranking: (r) => `Avalia participantes a partir da posição ${r.from}`,
   proximas: () => 'Ordem ainda incerta entre participantes próximas',
   revisao: () => 'Revisão entre candidatas ao 1º lugar',
   auditoria: () => 'Auditoria: par já visto, com lados sorteados de novo',
@@ -289,6 +291,7 @@ export class Engine {
       ...DEFAULT_PAIRING, coverageMin: settings.coverageMin, coverageMode: settings.coverageMode,
       wTop: settings.wTop, wUnder: settings.wUnder, wCross: settings.wCross, window: settings.window,
       groups: settings.groups, reviewMinP1: settings.reviewMinP1,
+      focusTopN: settings.focusTopN, focusShare: settings.focusShare,
     };
   }
 

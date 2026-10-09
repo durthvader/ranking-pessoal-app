@@ -16,18 +16,20 @@ export const DEFAULT_EVAL_SETTINGS = {
   // decisões manuais por avaliação: { evalId: { pid: { mode: 'congelada' | 'liberada', from } } }. A chave da avaliação
   // impede que valham em outra avaliação, já que a aprovação de um convidado copia estas configurações.
   freezeOverrides: {},
-  wTop: 6, // peso da disputa pelo 1º lugar (escolhido nas simulações)
+  wTop: 0, // peso extra da disputa pelo 1º lugar
   wUnder: 1.5, // peso de participantes pouco avaliadas
   wCross: 0.3, // peso de confrontos entre faixas
+  focusTopN: 100, // prioriza faixas até esta posição; 0 usa a lista inteira
+  focusShare: 0.8, // fração dos pares voltada a essas faixas após a cobertura
   window: 10, // vizinhas consideradas na ordem atual
   groups: [10, 25, 50, 100, 200, 350], // limites das faixas (posições)
-  stageSize: 250, // escolhas por etapa no chaveamento
+  stageSize: 200, // escolhas por etapa no chaveamento, mínimo 200
   mcSamples: 1000, // amostras de Monte Carlo
   level: 0.9, // nível da faixa provável
   topK: 10,
   closeThreshold: 0.75, // abaixo desta chance de ordem correta, posições são marcadas como próximas
   reviewMinP1: 0.01, // chance mínima de 1º lugar para entrar na revisão
-  reviewAuto: true, // etapa de revisão do 1º lugar começa sozinha perto do fim do orçamento
+  reviewAuto: false, // revisão do 1º lugar pode ser pedida durante o voto
   reviewFrom: 0.75, // fração do orçamento em que a etapa de revisão começa
   reviewShare: 0.5, // fração dos pares que vêm da revisão durante a etapa (escolhida nas simulações)
   auditGap: 25, // confrontos mínimos entre o voto original e a auditoria
@@ -54,6 +56,9 @@ export const SETTINGS_HELP = {
   freezeMargin: 'Derrotas a mais que vitórias. Com 4, congelam os placares 0-4, 1-5, 2-6, 3-7 e 4-8, e também os piores, como 0-6.',
   freezeMaxWins: 'A regra só vale para quem tem até esta quantidade de vitórias.',
   wTop: 'Prioridade para pares que podem mudar o 1º lugar.',
+  focusTopN: 'Depois da cobertura, distribui pares entre as faixas até esta posição. Com 100, inclui top 10, 11–25, 26–50 e 51–100. Use 0 para avaliar a lista inteira.',
+  focusShare: 'Fração dos pares dedicada às faixas prioritárias. Com 0,8, cerca de 80% refinam essas posições e 20% avaliam quem está abaixo delas.',
+  stageSize: 'Votos válidos por etapa, com mínimo de 200. Cobertura e revisão entram no mesmo bloco. A última etapa fica em andamento até completar esse número.',
   reviewAuto: 'Perto do fim do orçamento, os pares passam a vir das candidatas ao 1º lugar e das pouco avaliadas que ainda podem alcançar a líder.',
   reviewFrom: 'Fração do orçamento em que a etapa de revisão começa (0,75 = 3.000 de 4.000).',
   reviewShare: 'Fração dos pares da etapa que vem da revisão; o restante segue a fase adaptativa.',

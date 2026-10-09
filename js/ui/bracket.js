@@ -13,9 +13,9 @@ function s(tag, attrs = {}, ...kids) {
 
 export function renderBracket(app, root, query = {}) {
   const intro = h('p', { class: 'help' },
-    'Rodadas: confrontos da fase de cobertura, conforme a rodada registrada ao votar. Etapas: blocos de escolhas da fase adaptativa. '
-    + 'Ao fim de cada rodada ou etapa, o app reestima as pontuações só com os votos até ali e refaz as faixas. O ranking mantém as participantes congeladas e seus votos. '
-    + 'Uma cobertura retomada aparece depois das etapas já realizadas. Todas as participantes atuais aparecem desde o início; as novas começam com zero votos nas fases anteriores. '
+    'Cada etapa reúne um bloco de pelo menos 200 votos válidos, incluindo cobertura e revisão. A última fica em andamento até completar o bloco. '
+    + 'Ao fim de cada etapa, o app calcula as pontuações com os votos até ali e refaz as faixas. O ranking mantém as participantes congeladas e seus votos. '
+    + 'Todas as participantes atuais aparecem desde o início; as novas começam com zero votos nas etapas anteriores. '
     + 'Faixas em azul mostram quem permaneceu; faixas em laranja mostram quem mudou de faixa.');
   const pick = h('input', { type: 'search', placeholder: 'Ver o caminho de… (nome)', list: 'rp-names', style: { maxWidth: '320px' } });
   const datalist = h('datalist', { id: 'rp-names' });
@@ -142,7 +142,7 @@ export function renderBracket(app, root, query = {}) {
       pathBox.append(h('div', { class: 'card' },
         h('div', { class: 'row', style: { justifyContent: 'space-between' } },
           h('h2', null, `Caminho de ${p?.name || '?'}`), h('button', { class: 'btn small', onclick: () => openParticipant(app, selected) }, 'Abrir ficha')),
-        h('p', { class: 'help' }, 'Posição e índice ao fim de cada rodada ou etapa, calculados só com os votos até ali. Folgas não mudam pontuação nem contagens.'),
+        h('p', { class: 'help' }, 'Posição e índice ao fim de cada etapa, calculados com os votos até ali. A etapa em andamento usa os votos já recebidos. Folgas não mudam pontuação nem contagens.'),
         h('div', { style: { overflowX: 'auto' } }, h('table', { class: 'tbl' },
           h('thead', null, h('tr', null, h('th', null, 'Etapa'), h('th', null, 'Faixa'), h('th', { class: 'num' }, 'Posição'), h('th', { class: 'num' }, 'Índice'), h('th', null, 'Confrontos'))), tb))));
     }

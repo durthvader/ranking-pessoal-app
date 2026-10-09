@@ -1,48 +1,29 @@
 // Etapas do chaveamento dinâmico.
-// Usa a fase e a rodada registradas na apresentação. Uma nova cobertura após a fase
-// adaptativa forma outro período, sem acrescentar votos às rodadas anteriores.
-// Depois da cobertura, cada bloco de `stageSize` escolhas forma uma etapa.
+// Agrupa os votos em blocos cronológicos de pelo menos 200 escolhas.
+// Retomadas de cobertura e revisões ficam dentro do mesmo bloco.
 // Ao fim de cada etapa o app reestima as pontuações só com os votos até ali e forma as faixas.
 
 import { aggregate, fitMAP, toElo } from './bt.js';
 import { groupOf } from './pairing.js';
 
 // votes: [{w, l, phase, reason}] em ordem cronológica.
-export function computeStages(n, votes, { sigma = 1.5, coverageMin = 6, stageSize = 250, groups = [10, 25, 50, 100, 200, 350] } = {}) {
-  const counts = new Int32Array(n);
+export function computeStages(n, votes, { sigma = 1.5, stageSize = 200, groups = [10, 25, 50, 100, 200, 350] } = {}) {
+  const size = Number.isFinite(stageSize) ? Math.max(200, Math.floor(stageSize)) : 200;
   const label = new Int32Array(votes.length);
-  let adaptiveSeen = 0;
-  let period = -1, previousKind = null;
-  const periods = [];
-  for (let t = 0; t < votes.length; t++) {
-    const { w, l, phase, reason } = votes[t];
-    const recordedRound = reason?.round;
-    const r = Number.isInteger(recordedRound) && recordedRound > 0
-      ? recordedRound : Math.min(counts[w], counts[l]) + 1;
-    const recordedKind = phase || (reason?.kind === 'cobertura' ? 'cobertura' : reason?.kind ? 'etapa' : null);
-    const kind = recordedKind ? (recordedKind === 'cobertura' ? 'cobertura' : 'etapa') : (r <= coverageMin ? 'cobertura' : 'etapa');
-    if (kind !== previousKind) { period++; periods.push(new Map()); previousKind = kind; }
-    const number = kind === 'cobertura' ? r : 1 + Math.floor(adaptiveSeen++ / stageSize);
-    const buckets = periods[period];
-    if (!buckets.has(number)) buckets.set(number, { kind, number, votes: [] });
-    buckets.get(number).votes.push(t);
-    counts[w]++; counts[l]++;
-  }
   const stages = [];
-  const occurrences = new Map();
-  let endIdx = -1;
-  for (const buckets of periods) {
-    for (const st of [...buckets.values()].sort((a, b) => a.number - b.number)) {
-      const key = `${st.kind}:${st.number}`;
-      const occurrence = (occurrences.get(key) || 0) + 1;
-      occurrences.set(key, occurrence);
-      endIdx = Math.max(endIdx, st.votes.at(-1));
-      st.label = `${st.kind === 'cobertura' ? 'Rodada' : 'Etapa'} ${st.number}${occurrence > 1 ? ` (retomada ${occurrence - 1})` : ''}`;
-      st.occurrence = occurrence;
-      st.end = endIdx;
-      for (const t of st.votes) label[t] = stages.length + 1;
-      stages.push(st);
+  for (let start = 0; start < votes.length; start += size) {
+    const end = Math.min(start + size, votes.length) - 1;
+    const number = stages.length + 1;
+    const complete = end - start + 1 === size;
+    const indices = [], phases = {};
+    for (let t = start; t <= end; t++) {
+      indices.push(t);
+      label[t] = number;
+      const phase = votes[t].phase || (votes[t].reason?.kind === 'cobertura' ? 'cobertura' : 'adaptativa');
+      phases[phase] = (phases[phase] || 0) + 1;
     }
+    stages.push({ kind: 'etapa', number, occurrence: 1, start, end, votes: indices,
+      complete, target: size, phases, label: `Etapa ${number}${complete ? '' : ' (em andamento)'}` });
   }
   let init = null;
   for (const st of stages) {
@@ -70,5 +51,5 @@ export function computeStages(n, votes, { sigma = 1.5, coverageMin = 6, stageSiz
     }
     flows.push(m);
   }
-  return { stages, flows, groups, label: Array.from(label) };
+  return { stages, flows, groups, stageSize: size, label: Array.from(label) };
 }

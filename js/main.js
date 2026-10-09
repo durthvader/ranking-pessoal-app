@@ -20,7 +20,7 @@ import { canUseRoute, assertWritableEvents, isOwner } from './access.js';
 import { renderGuests } from './ui/guests.js';
 import { renderCorrelation } from './ui/correlation.js';
 
-export const APP_VERSION = '1.2.2';
+export const APP_VERSION = '1.3.0';
 const SESSION_GAP_MS = 30 * 60 * 1000;
 
 const ROUTES = {

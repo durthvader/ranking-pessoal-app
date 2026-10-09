@@ -67,8 +67,10 @@ export function renderSettings(app, root) {
       num('wTop', 'Peso da disputa pelo 1º lugar', { min: 0, max: 20, step: 0.5 }),
       num('wUnder', 'Peso das pouco avaliadas', { min: 0, max: 20, step: 0.5 }),
       num('wCross', 'Peso dos confrontos entre faixas', { min: 0, max: 20, step: 0.1 }),
+      num('focusTopN', 'Priorizar posições até', { min: 0, step: 10 }),
+      num('focusShare', 'Fração dos pares nas posições prioritárias', { min: 0, max: 1, step: 0.05 }),
       h('label', { class: 'field' }, h('span', null, 'Limites das faixas (posições)'), groups, h('span', { class: 'help' }, 'Ex.: 10, 25, 50, 100, 200, 350 formam as faixas Top 10, 11–25, 26–50…')),
-      num('stageSize', 'Escolhas por etapa no chaveamento', { min: 50, step: 50 }),
+      num('stageSize', 'Confrontos por etapa no chaveamento', { min: 200, step: 50 }),
       sel('level', 'Nível das faixas de incerteza', [['0.8', '80%'], ['0.9', '90%'], ['0.95', '95%']]),
       num('mcSamples', 'Amostras de Monte Carlo', { min: 200, max: 5000, step: 100 }),
       num('closeThreshold', 'Ordem incerta abaixo de (chance)', { min: 0.5, max: 0.99, step: 0.05 }),
@@ -89,6 +91,8 @@ export function renderSettings(app, root) {
       if (!g.length) { toast('Informe ao menos um limite de faixa.', { type: 'err' }); return; }
       vals.groups = [...new Set(g)];
       if (vals.sigma <= 0) { toast('σ precisa ser maior que zero.', { type: 'err' }); return; }
+      if (!Number.isInteger(vals.stageSize) || vals.stageSize < 200) { toast('Cada etapa precisa ter pelo menos 200 confrontos.', { type: 'err' }); return; }
+      if (!Number.isInteger(vals.focusTopN) || vals.focusTopN < 0 || vals.focusShare < 0 || vals.focusShare > 1) { toast('Informe uma posição inteira a partir de zero e uma fração entre 0 e 1.', { type: 'err' }); return; }
       if (!(vals.freezeMargin >= 1) || !(vals.freezeMaxWins >= 0)) { toast('Use números inteiros positivos na regra de congelamento.', { type: 'err' }); return; }
       await app.setEvalSettings(vals);
       toast('Configurações da avaliação salvas. O ranking será recalculado.');

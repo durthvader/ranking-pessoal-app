@@ -23,9 +23,11 @@ export const DEFAULT_PAIRING = {
   coverageMode: 'aleatorio', // 'aleatorio' | 'suico'
   window: 10, // vizinhas consideradas acima/abaixo na ordem atual
   randomCandidates: 2, // candidatas distantes sorteadas por participante
-  wTop: 6,
+  wTop: 0,
   wUnder: 1.5,
   wCross: 0.3,
+  focusTopN: 100, // posições que recebem a maior parte dos pares após a cobertura
+  focusShare: 0.8, // fração dedicada às faixas até focusTopN
   repeatPenalty: 0.35, // multiplica a pontuação a cada repetição do par
   deferPenalty: 0.35, // a cada "Rever depois" do par
   recentPairWindow: 150, // apresentações até o mesmo par poder voltar sem penalidade forte
@@ -244,9 +246,14 @@ function adaptivePair(ctx, st, rng, elig, excluded, reviewMode) {
   const n = ctx.n;
   const { mu, S, p1 } = ctx.model;
   const counts = ctx.counts;
-  const order = elig.slice().sort((a, b) => mu[b] - mu[a] || a - b);
+  // Posições incluem as congeladas, como no ranking mostrado ao usuário.
+  const allOrder = Array.from({ length: n }, (_, i) => i).sort((a, b) =>
+    Math.round(mu[b] * 1e6) - Math.round(mu[a] * 1e6) || a - b);
   const pos = new Int32Array(n).fill(-1);
-  order.forEach((i, k) => { pos[i] = k; });
+  allOrder.forEach((i, k) => { pos[i] = k; });
+  let order = allOrder.filter(i => ctx.eligible[i]);
+  const range = reviewMode ? null : focusRange(st, rng, order, pos, n);
+  if (range) order = order.filter(i => pos[i] >= range.poolLo && pos[i] < range.poolHi);
   const grp = (i) => groupOf(pos[i], st.groups);
   let p1max = 1 / elig.length;
   if (p1) for (const i of elig) p1max = Math.max(p1max, p1[i]);
@@ -256,6 +263,8 @@ function adaptivePair(ctx, st, rng, elig, excluded, reviewMode) {
   const cand = new Map();
   const add = (i, j) => {
     if (i === j) return;
+    if (range && (pos[i] < range.poolLo || pos[i] >= range.poolHi || pos[j] < range.poolLo || pos[j] >= range.poolHi
+      || ![i, j].some(k => pos[k] >= range.lo && pos[k] < range.hi))) return;
     const key = pairKey(i, j);
     if (excluded.has(key) || cand.has(key)) return;
     cand.set(key, [i, j]);
@@ -311,7 +320,33 @@ function adaptivePair(ctx, st, rng, elig, excluded, reviewMode) {
   } else {
     chosen = rng.pick(top);
   }
-  return { i: chosen.i, j: chosen.j, reason: explain(chosen, ctx, pos, reviewMode) };
+  const reason = explain(chosen, ctx, pos, reviewMode);
+  if (range) {
+    reason.kind = range.focus ? 'faixa_prioritaria' : 'ampliar_ranking';
+    reason.from = range.lo + 1;
+    reason.to = range.hi;
+  }
+  return { i: chosen.i, j: chosen.j, reason };
+}
+
+// Sorteia uma faixa pelo número de participantes elegíveis. Assim as posições
+// 51–100 recebem mais pares que o top 10. Três vizinhas de cada lado ligam as faixas.
+function focusRange(st, rng, order, pos, n) {
+  const limit = Math.min(n, Math.max(0, Math.floor(st.focusTopN)));
+  if (!limit || order.length < 2) return null;
+  const share = Math.min(1, Math.max(0, st.focusShare));
+  const make = (lo, hi, focus) => ({ lo, hi, focus, poolLo: Math.max(0, lo - 3), poolHi: Math.min(n, hi + 3) });
+  const usable = r => order.some(i => pos[i] >= r.lo && pos[i] < r.hi)
+    && order.filter(i => pos[i] >= r.poolLo && pos[i] < r.poolHi).length >= 2;
+  const bounds = [0, ...st.groups.filter(g => g > 0 && g < limit), limit];
+  const ranges = bounds.slice(1).map((hi, k) => make(bounds[k], hi, true)).filter(usable);
+  const outside = make(limit, n, false);
+  if (usable(outside) && (!ranges.length || rng() >= share)) return outside;
+  if (!ranges.length) return usable(outside) ? outside : null;
+  const weights = ranges.map(r => order.filter(i => pos[i] >= r.lo && pos[i] < r.hi).length);
+  let draw = rng() * weights.reduce((a, b) => a + b, 0);
+  for (let k = 0; k < ranges.length; k++) { draw -= weights[k]; if (draw <= 0) return ranges[k]; }
+  return ranges.at(-1);
 }
 
 function explain(c, ctx, pos, reviewMode) {
